@@ -35,6 +35,7 @@ _FIELD_LABEL_TERMS = {
     "telefone",
     "tel",
 }
+_LABEL_SEPARATOR = r"\s*(?::|-)?\s+"
 _WORD_PATTERN = re.compile(r"\w+", flags=re.UNICODE)
 
 
@@ -47,7 +48,7 @@ class InstitutionRecognizer(PatternRecognizer):
                     name="healthcare_institution",
                     regex=(
                         r"\b(?:Hospital|Cl[ií]nica|UBS|UPA|Unidade\s+B[aá]sica\s+de\s+Sa[uú]de|"
-                        r"Laborat[oó]rio)\s+[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ]"
+                        rf"Laborat[oó]rio){_LABEL_SEPARATOR}[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ]"
                         r"[\wÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇáàâãéèêíìîóòôõúùûç .'-]{2,60}"
                     ),
                     score=0.7,

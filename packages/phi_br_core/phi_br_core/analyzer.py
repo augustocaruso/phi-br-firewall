@@ -18,6 +18,7 @@ from phi_br_core.policy import PhiPolicy
 from phi_br_core.recognizers.cep import CepRecognizer
 from phi_br_core.recognizers.clinical_ids import ClinicalIdRecognizer
 from phi_br_core.recognizers.cns import CnsRecognizer
+from phi_br_core.recognizers.contextual_identifier import ContextualIdentifierRecognizer
 from phi_br_core.recognizers.cpf import CpfRecognizer
 from phi_br_core.recognizers.crm import CrmRecognizer
 from phi_br_core.recognizers.dates_br import DateBrRecognizer
@@ -140,6 +141,7 @@ def build_registry(languages: list[str] | None = None) -> RecognizerRegistry:
     registry.add_recognizer(CepRecognizer())
     registry.add_recognizer(PhoneBrRecognizer())
     registry.add_recognizer(EmailBrRecognizer())
+    registry.add_recognizer(ContextualIdentifierRecognizer())
     registry.add_recognizer(ClinicalIdRecognizer())
     registry.add_recognizer(DateBrRecognizer())
     registry.add_recognizer(InstitutionRecognizer())

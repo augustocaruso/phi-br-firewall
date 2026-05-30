@@ -10,6 +10,7 @@ from phi_br_core.entities import BR_HEALTHCARE_PROFESSIONAL_NAME, BR_PATIENT_NAM
 _NAME_WORD = r"[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][A-Za-zÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇáàâãéèêíìîóòôõúùûç]+"
 _CONNECTOR = r"(?:da|de|do|das|dos|e)"
 _NAME = rf"{_NAME_WORD}(?:\s+(?:{_CONNECTOR}\s+)?{_NAME_WORD}){{0,4}}"
+_LABEL_SEPARATOR = r"\s*(?::|-)?\s+"
 _MEDICATION_TERMS = {
     "aripiprazol",
     "buspirona",
@@ -72,10 +73,10 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
             context=["paciente", "dra", "dr", "medico", "médico", "profissional"],
         )
         self._patient_pattern = re.compile(
-            rf"\b(?i:paciente|usu[aá]rio|cliente)\s+(?P<name>{_NAME})\b",
+            rf"\b(?i:paciente|usu[aá]rio|cliente){_LABEL_SEPARATOR}(?P<name>{_NAME})\b",
         )
         self._professional_pattern = re.compile(
-            rf"\b(?i:dr\.?|dra\.?|m[eé]dico|m[eé]dica)\s+(?P<name>{_NAME})\b",
+            rf"\b(?i:dr\.?|dra\.?|m[eé]dico|m[eé]dica){_LABEL_SEPARATOR}(?P<name>{_NAME})\b",
         )
 
     def load(self) -> None:

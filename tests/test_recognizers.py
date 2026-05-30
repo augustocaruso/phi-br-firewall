@@ -60,6 +60,14 @@ def test_detects_uppercase_names_by_context() -> None:
     assert "BR_HEALTHCARE_PROFESSIONAL_NAME" in types
 
 
+def test_detects_names_after_label_separators() -> None:
+    patient_types = entity_types_for("Paciente: Maria Silva.")
+    professional_types = entity_types_for("Medica - Ana Souza.")
+
+    assert "BR_PATIENT_NAME" in patient_types
+    assert "BR_HEALTHCARE_PROFESSIONAL_NAME" in professional_types
+
+
 def test_name_context_stops_before_next_field_label() -> None:
     text = "Paciente Maria Telefone (61) 99999-9999."
     findings = findings_for(text)
@@ -78,6 +86,7 @@ def test_detects_email_with_project_entity_type() -> None:
     types = entity_types_for("Email maria@example.com registrado.")
 
     assert "BR_EMAIL" in types
+    assert "BR_CONTEXTUAL_IDENTIFIER" not in types
     assert "EMAIL_ADDRESS" not in types
 
 
@@ -93,3 +102,16 @@ def test_institution_context_stops_before_next_field_label() -> None:
 
     assert institutions == ["Hospital Santa Lucia"]
     assert "BR_PHONE" in {result.entity_type for result in findings}
+
+
+def test_detects_institution_after_label_separator() -> None:
+    types = entity_types_for("Encaminhada para Hospital: Santa Lucia.")
+
+    assert "BR_INSTITUTION" in types
+
+
+def test_detects_url_as_contextual_identifier() -> None:
+    types = entity_types_for("Portal https://portal.hospital.com.br/paciente/12345.")
+
+    assert "BR_CONTEXTUAL_IDENTIFIER" in types
+    assert "URL" not in types
