@@ -1,3 +1,4 @@
+from phi_br_core.analyzer import build_analyzer, build_registry
 from phi_br_core.entities import (
     BR_ENTITY_TYPES,
     ENTITY_SPECIFICITY,
@@ -25,6 +26,8 @@ __all__ = [
     "ENTITY_SPECIFICITY_ORDER",
     "ENTITY_TO_PLACEHOLDER_PREFIX",
     "AgePolicy",
+    "build_analyzer",
+    "build_registry",
     "DatePolicy",
     "MappingPolicy",
     "PhiAuditResult",
