@@ -79,3 +79,17 @@ def test_detects_email_with_project_entity_type() -> None:
 
     assert "BR_EMAIL" in types
     assert "EMAIL_ADDRESS" not in types
+
+
+def test_institution_context_stops_before_next_field_label() -> None:
+    text = "Paciente Maria Hospital Santa Lucia Telefone (61) 99999-9999."
+    findings = findings_for(text)
+
+    institutions = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_INSTITUTION"
+    ]
+
+    assert institutions == ["Hospital Santa Lucia"]
+    assert "BR_PHONE" in {result.entity_type for result in findings}
