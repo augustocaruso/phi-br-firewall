@@ -4,10 +4,15 @@ Local-first PHI/PII redaction for Brazilian Portuguese clinical text.
 
 The MVP uses Microsoft Presidio for local detection, stable local placeholders for reversible pseudonymization, and an OpenCode `/phi` command so raw clinical text is redacted before it reaches a model.
 
-Public commands:
+Currently implemented baseline verification command:
 
 ```bash
 phi check
+```
+
+Planned public MVP commands:
+
+```bash
 phi redact
 phi restore
 phi status
