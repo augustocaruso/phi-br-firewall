@@ -90,6 +90,22 @@ def test_detects_email_with_project_entity_type() -> None:
     assert "EMAIL_ADDRESS" not in types
 
 
+def test_does_not_detect_email_parts_as_contextual_identifiers() -> None:
+    texts = [
+        "Email maria@portal.hospital.com.br registrado.",
+        "Email foo.maria@example.com registrado.",
+    ]
+
+    for text in texts:
+        findings = findings_for(text)
+        assert "BR_EMAIL" in {result.entity_type for result in findings}
+        assert [
+            text[result.start : result.end]
+            for result in findings
+            if result.entity_type == "BR_CONTEXTUAL_IDENTIFIER"
+        ] == []
+
+
 def test_institution_context_stops_before_next_field_label() -> None:
     text = "Paciente Maria Hospital Santa Lucia Telefone (61) 99999-9999."
     findings = findings_for(text)
