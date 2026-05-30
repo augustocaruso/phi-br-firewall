@@ -1,3 +1,4 @@
+import pytest
 from phi_br_core.entities import (
     BR_CPF,
     BR_CRM,
@@ -7,7 +8,8 @@ from phi_br_core.entities import (
     ENTITY_SPECIFICITY_ORDER,
     ENTITY_TO_PLACEHOLDER_PREFIX,
 )
-from phi_br_core.policy import PhiPolicy
+from phi_br_core.policy import AgePolicy, DatePolicy, MappingPolicy, PhiPolicy, SessionPolicy
+from pydantic import BaseModel, ValidationError
 
 
 def test_policy_defaults_are_safe() -> None:
@@ -29,3 +31,28 @@ def test_entity_constants_define_placeholders_and_specificity() -> None:
     assert ENTITY_TO_PLACEHOLDER_PREFIX["BR_PATIENT_NAME"] == "PACIENTE"
     assert BR_CRM in ENTITY_SPECIFICITY_ORDER
     assert ENTITY_SPECIFICITY[BR_CRM] > ENTITY_SPECIFICITY[BR_DATE]
+
+
+@pytest.mark.parametrize(
+    "policy_model",
+    [MappingPolicy, DatePolicy, AgePolicy, SessionPolicy, PhiPolicy],
+)
+def test_policy_models_reject_typo_fields(policy_model: type[BaseModel]) -> None:
+    with pytest.raises(ValidationError):
+        policy_model(unknwon_field=True)
+
+
+@pytest.mark.parametrize("field_name", ["min_score", "audit_threshold"])
+@pytest.mark.parametrize("value", [-0.01, 1.01])
+def test_phi_policy_rejects_scores_outside_zero_to_one(
+    field_name: str, value: float
+) -> None:
+    with pytest.raises(ValidationError):
+        PhiPolicy(**{field_name: value})
+
+
+@pytest.mark.parametrize("field_name", ["ttl_hours", "max_sessions"])
+@pytest.mark.parametrize("value", [-1, 0])
+def test_session_policy_rejects_non_positive_limits(field_name: str, value: int) -> None:
+    with pytest.raises(ValidationError):
+        SessionPolicy(**{field_name: value})

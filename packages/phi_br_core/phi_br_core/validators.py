@@ -2,7 +2,7 @@ from __future__ import annotations
 
 
 def only_digits(value: str) -> str:
-    return "".join(char for char in value if char.isdigit())
+    return "".join(char for char in value if "0" <= char <= "9")
 
 
 def validate_cpf(value: str) -> bool:
