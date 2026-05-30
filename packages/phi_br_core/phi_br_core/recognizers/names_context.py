@@ -7,21 +7,61 @@ from presidio_analyzer.nlp_engine import NlpArtifacts
 
 from phi_br_core.entities import BR_HEALTHCARE_PROFESSIONAL_NAME, BR_PATIENT_NAME
 
-_NAME_WORD = r"[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][a-záàâãéèêíìîóòôõúùûç]+"
+_NAME_WORD = r"[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][A-Za-zÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇáàâãéèêíìîóòôõúùûç]+"
 _CONNECTOR = r"(?:da|de|do|das|dos|e)"
 _NAME = rf"{_NAME_WORD}(?:\s+(?:{_CONNECTOR}\s+)?{_NAME_WORD}){{0,4}}"
 _MEDICATION_TERMS = {
-    "amoxicilina",
-    "dipirona",
-    "ibuprofeno",
-    "losartana",
-    "metformina",
-    "omeprazol",
-    "paracetamol",
-    "prednisona",
+    "aripiprazol",
+    "buspirona",
+    "clonazepam",
+    "divalproato",
+    "escitalopram",
+    "fluoxetina",
+    "lamotrigina",
+    "litio",
+    "lítio",
+    "melatonina",
+    "olanzapina",
     "quetiapina",
+    "risperidona",
     "sertralina",
+    "valproato",
+    "venlafaxina",
+    "zolpidem",
 }
+_FIELD_LABEL_TERMS = {
+    "atendimento",
+    "autorizacao",
+    "autorização",
+    "cep",
+    "clinica",
+    "clínica",
+    "cns",
+    "convenio",
+    "convênio",
+    "cpf",
+    "crm",
+    "data",
+    "dn",
+    "email",
+    "e-mail",
+    "endereco",
+    "endereço",
+    "exame",
+    "guia",
+    "hospital",
+    "laboratorio",
+    "laboratório",
+    "laudo",
+    "nascimento",
+    "pedido",
+    "prontuario",
+    "prontuário",
+    "registro",
+    "telefone",
+    "tel",
+}
+_WORD_PATTERN = re.compile(r"\w+", flags=re.UNICODE)
 
 
 class ClinicalNameContextRecognizer(EntityRecognizer):
@@ -32,10 +72,10 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
             context=["paciente", "dra", "dr", "medico", "médico", "profissional"],
         )
         self._patient_pattern = re.compile(
-            rf"\b(?:Paciente|paciente|Usu[aá]rio|usu[aá]rio|Cliente|cliente)\s+(?P<name>{_NAME})\b",
+            rf"\b(?i:paciente|usu[aá]rio|cliente)\s+(?P<name>{_NAME})\b",
         )
         self._professional_pattern = re.compile(
-            rf"\b(?:Dr\.?|dr\.?|Dra\.?|dra\.?|M[eé]dico|m[eé]dico|M[eé]dica|m[eé]dica)\s+(?P<name>{_NAME})\b",
+            rf"\b(?i:dr\.?|dra\.?|m[eé]dico|m[eé]dica)\s+(?P<name>{_NAME})\b",
         )
 
     def load(self) -> None:
@@ -75,7 +115,10 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
             name = match.group("name")
             if self._contains_medication_term(name):
                 continue
-            start, end = match.span("name")
+            span = self._trim_field_label_suffix(match)
+            if span is None:
+                continue
+            start, end = span
             results.append(
                 RecognizerResult(
                     entity_type=entity_type,
@@ -87,6 +130,23 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
         return results
 
     @staticmethod
+    def _trim_field_label_suffix(match: re.Match[str]) -> tuple[int, int] | None:
+        name_start = match.start("name")
+        name = match.group("name")
+        words = list(_WORD_PATTERN.finditer(name))
+        if not words:
+            return None
+
+        for index, word in enumerate(words):
+            if word.group(0).lower() not in _FIELD_LABEL_TERMS:
+                continue
+            if index == 0:
+                return None
+            return name_start, name_start + words[index - 1].end()
+
+        return match.span("name")
+
+    @staticmethod
     def _contains_medication_term(name: str) -> bool:
-        words = {word.lower() for word in re.findall(r"\w+", name, flags=re.UNICODE)}
+        words = {word.lower() for word in _WORD_PATTERN.findall(name)}
         return bool(words & _MEDICATION_TERMS)

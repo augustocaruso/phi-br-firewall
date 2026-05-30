@@ -1,11 +1,15 @@
 from phi_br_core.analyzer import build_analyzer
 from phi_br_core.policy import PhiPolicy
+from presidio_analyzer import RecognizerResult
+
+
+def findings_for(text: str) -> list[RecognizerResult]:
+    analyzer = build_analyzer(PhiPolicy())
+    return analyzer.analyze(text=text, language="pt", score_threshold=0.35)
 
 
 def entity_types_for(text: str) -> set[str]:
-    analyzer = build_analyzer(PhiPolicy())
-    results = analyzer.analyze(text=text, language="pt", score_threshold=0.35)
-    return {result.entity_type for result in results}
+    return {result.entity_type for result in findings_for(text)}
 
 
 def test_detects_valid_cpf() -> None:
@@ -47,3 +51,31 @@ def test_detects_patient_and_professional_names_by_context() -> None:
     types = entity_types_for("Paciente Joao da Silva avaliado pela Dra Ana Souza.")
     assert "BR_PATIENT_NAME" in types
     assert "BR_HEALTHCARE_PROFESSIONAL_NAME" in types
+
+
+def test_detects_uppercase_names_by_context() -> None:
+    types = entity_types_for("Paciente MARIA SILVA avaliada pela DRA ANA SOUZA.")
+
+    assert "BR_PATIENT_NAME" in types
+    assert "BR_HEALTHCARE_PROFESSIONAL_NAME" in types
+
+
+def test_name_context_stops_before_next_field_label() -> None:
+    text = "Paciente Maria Telefone (61) 99999-9999."
+    findings = findings_for(text)
+
+    patient_names = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_PATIENT_NAME"
+    ]
+
+    assert patient_names == ["Maria"]
+    assert "BR_PHONE" in {result.entity_type for result in findings}
+
+
+def test_detects_email_with_project_entity_type() -> None:
+    types = entity_types_for("Email maria@example.com registrado.")
+
+    assert "BR_EMAIL" in types
+    assert "EMAIL_ADDRESS" not in types

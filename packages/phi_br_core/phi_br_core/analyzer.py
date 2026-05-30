@@ -21,6 +21,7 @@ from phi_br_core.recognizers.cns import CnsRecognizer
 from phi_br_core.recognizers.cpf import CpfRecognizer
 from phi_br_core.recognizers.crm import CrmRecognizer
 from phi_br_core.recognizers.dates_br import DateBrRecognizer
+from phi_br_core.recognizers.email_br import EmailBrRecognizer
 from phi_br_core.recognizers.institutions import InstitutionRecognizer
 from phi_br_core.recognizers.names_context import ClinicalNameContextRecognizer
 from phi_br_core.recognizers.phone_br import PhoneBrRecognizer
@@ -138,11 +139,18 @@ def build_registry(languages: list[str] | None = None) -> RecognizerRegistry:
     registry.add_recognizer(CrmRecognizer())
     registry.add_recognizer(CepRecognizer())
     registry.add_recognizer(PhoneBrRecognizer())
+    registry.add_recognizer(EmailBrRecognizer())
     registry.add_recognizer(ClinicalIdRecognizer())
     registry.add_recognizer(DateBrRecognizer())
     registry.add_recognizer(InstitutionRecognizer())
     registry.add_recognizer(ClinicalNameContextRecognizer())
+    _remove_conflicting_predefined_recognizers(registry)
     return registry
+
+
+def _remove_conflicting_predefined_recognizers(registry: RecognizerRegistry) -> None:
+    for recognizer_name in ("EmailRecognizer", "PhoneRecognizer", "UrlRecognizer"):
+        registry.remove_recognizer(recognizer_name)
 
 
 def build_analyzer(policy: PhiPolicy) -> AnalyzerEngine:
