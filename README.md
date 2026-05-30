@@ -7,6 +7,7 @@ The MVP uses Microsoft Presidio for local detection, stable local placeholders f
 Public commands:
 
 ```bash
+phi check
 phi redact
 phi restore
 phi status
