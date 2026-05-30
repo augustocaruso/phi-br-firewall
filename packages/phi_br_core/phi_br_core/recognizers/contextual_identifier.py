@@ -51,5 +51,16 @@ class ContextualIdentifierRecognizer(PatternRecognizer):
         return [
             result
             for result in results
-            if not any(result.start < end and start < result.end for start, end in email_spans)
+            if not self._is_email_fragment(text, result, email_spans)
         ]
+
+    @staticmethod
+    def _is_email_fragment(
+        text: str,
+        result: RecognizerResult,
+        email_spans: list[tuple[int, int]],
+    ) -> bool:
+        value = text[result.start : result.end].lower()
+        if "://" in value:
+            return False
+        return any(result.start < end and start < result.end for start, end in email_spans)

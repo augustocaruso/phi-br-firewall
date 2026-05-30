@@ -131,3 +131,10 @@ def test_detects_url_as_contextual_identifier() -> None:
 
     assert "BR_CONTEXTUAL_IDENTIFIER" in types
     assert "URL" not in types
+
+
+def test_detects_url_with_email_like_path_as_contextual_identifier() -> None:
+    types = entity_types_for("Portal https://portal.hospital.com.br/paciente/maria@example.com.")
+
+    assert "BR_CONTEXTUAL_IDENTIFIER" in types
+    assert "BR_EMAIL" in types
