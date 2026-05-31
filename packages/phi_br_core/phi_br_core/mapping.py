@@ -22,15 +22,16 @@ class PlaceholderIndex:
         self.path = path
 
     def assign(self, placeholder_key: str, session_id: str) -> None:
-        placeholders = self._read()
+        placeholders, counters = self._read_state()
         sessions = placeholders.setdefault(placeholder_key, [])
         if session_id not in sessions:
             sessions.append(session_id)
-        self._write(placeholders)
+        self._remember_key(counters, placeholder_key)
+        self._write(placeholders, counters)
 
     def next_key(self, prefix: str) -> str:
-        placeholders = self._read()
-        highest = 0
+        placeholders, counters = self._read_state()
+        highest = counters.get(prefix, 0)
         marker = f"{prefix}_"
         for placeholder_key in placeholders:
             if not placeholder_key.startswith(marker):
@@ -44,13 +45,13 @@ class PlaceholderIndex:
         if not session_ids:
             return
         removed = set(session_ids)
-        placeholders = self._read()
+        placeholders, counters = self._read_state()
         cleaned: dict[str, list[str]] = {}
         for placeholder_key, sessions in placeholders.items():
             active_sessions = [session_id for session_id in sessions if session_id not in removed]
             if active_sessions:
                 cleaned[placeholder_key] = active_sessions
-        self._write(cleaned)
+        self._write(cleaned, counters)
 
     def resolve(self, placeholder_keys: list[str]) -> dict[str, str]:
         placeholders = self._read()
@@ -64,20 +65,41 @@ class PlaceholderIndex:
         return resolved
 
     def _read(self) -> dict[str, list[str]]:
+        return self._read_state()[0]
+
+    def _read_state(self) -> tuple[dict[str, list[str]], dict[str, int]]:
         if not self.path.exists():
-            return {}
+            return {}, {}
         raw: Any = json.loads(self.path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
-            return {}
+            return {}, {}
         placeholders = raw.get("placeholders", {})
         if not isinstance(placeholders, dict):
-            return {}
+            placeholders = {}
 
         parsed: dict[str, list[str]] = {}
         for key, value in placeholders.items():
             if isinstance(key, str) and isinstance(value, list):
                 parsed[key] = [item for item in value if isinstance(item, str)]
-        return parsed
 
-    def _write(self, placeholders: dict[str, list[str]]) -> None:
-        write_json_atomic(self.path, {"placeholders": placeholders})
+        counters: dict[str, int] = {}
+        raw_counters = raw.get("counters", {})
+        if isinstance(raw_counters, dict):
+            for key, value in raw_counters.items():
+                if isinstance(key, str) and isinstance(value, int) and value >= 0:
+                    counters[key] = value
+
+        for placeholder_key in parsed:
+            self._remember_key(counters, placeholder_key)
+
+        return parsed, counters
+
+    def _write(self, placeholders: dict[str, list[str]], counters: dict[str, int]) -> None:
+        write_json_atomic(self.path, {"counters": counters, "placeholders": placeholders})
+
+    @staticmethod
+    def _remember_key(counters: dict[str, int], placeholder_key: str) -> None:
+        prefix, separator, suffix = placeholder_key.rpartition("_")
+        if separator != "_" or not prefix or not suffix.isdecimal():
+            return
+        counters[prefix] = max(counters.get(prefix, 0), int(suffix))

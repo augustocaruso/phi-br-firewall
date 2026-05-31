@@ -45,6 +45,16 @@ def test_placeholder_index_removes_purged_sessions(tmp_path) -> None:
     assert index.resolve(["PACIENTE_002"]) == {"PACIENTE_002": "phi-active"}
 
 
+def test_placeholder_index_does_not_reuse_numbers_after_purge(tmp_path) -> None:
+    index = PlaceholderIndex(tmp_path / "index.json")
+    index.assign("PACIENTE_001", "phi-expired")
+
+    index.remove_sessions(["phi-expired"])
+
+    assert index.resolve(["PACIENTE_001"]) == {}
+    assert index.next_key("PACIENTE") == "PACIENTE_002"
+
+
 def test_session_store_creates_metadata_under_session_directory(tmp_path) -> None:
     store = SessionStore(tmp_path)
     now = datetime(2026, 5, 27, 20, 0, tzinfo=UTC)

@@ -57,11 +57,22 @@ def restore_text(text: str, mapping_path: str) -> str:
 
 
 def _apply_audit(result: PhiScrubResult, audit: PhiAuditResult) -> PhiScrubResult:
+    safe_audit = audit if audit.safe else _without_residual_text(audit)
     return result.model_copy(
         update={
-            "audit": audit,
-            "ok": audit.safe,
-            "scrubbed_text": result.scrubbed_text if audit.safe else "",
+            "audit": safe_audit,
+            "ok": safe_audit.safe,
+            "scrubbed_text": result.scrubbed_text if safe_audit.safe else "",
+        }
+    )
+
+
+def _without_residual_text(audit: PhiAuditResult) -> PhiAuditResult:
+    return audit.model_copy(
+        update={
+            "residual_findings": [
+                finding.model_copy(update={"text": ""}) for finding in audit.residual_findings
+            ]
         }
     )
 
