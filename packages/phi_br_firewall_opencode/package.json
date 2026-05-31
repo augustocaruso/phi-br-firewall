@@ -1,8 +1,17 @@
 {
   "name": "phi-br-firewall-opencode",
   "version": "0.1.0",
+  "description": "OpenCode plugin for local PHI redaction with phi-br-firewall",
   "type": "module",
   "private": true,
+  "main": "./src/plugin.ts",
+  "exports": {
+    ".": "./src/plugin.ts",
+    "./server": "./src/plugin.ts"
+  },
+  "files": [
+    "src"
+  ],
   "scripts": {
     "test": "vitest",
     "typecheck": "tsc --noEmit"
