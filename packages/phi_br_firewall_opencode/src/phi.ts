@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
-import { dirname, join, parse } from "node:path"
+import { dirname, join, parse, resolve } from "node:path"
 
 export type PhiRedactSuccess = {
   ok: true
@@ -17,6 +17,14 @@ export type PhiRedactFailure = {
 export type PhiRedactResult = PhiRedactSuccess | PhiRedactFailure
 export type PhiRunner = (text: string, sessionID?: string) => Promise<PhiRedactResult>
 
+export type PhiRunnerOptions = {
+  command?: string
+  searchStart?: string
+  timeoutMs?: number
+}
+
+const DEFAULT_TIMEOUT_MS = 15_000
+
 type CliPayload = {
   ok?: unknown
   scrubbed_text?: unknown
@@ -25,46 +33,59 @@ type CliPayload = {
   reason?: unknown
 }
 
-export const runPhiCli: PhiRunner = async (text) => {
-  const result = await runProcess(resolvePhiCommand(), ["scrub-stdin", "--json"], text)
-  if (!result.ok) return { ok: false, reason: result.reason }
+export function createPhiRunner(options: PhiRunnerOptions = {}): PhiRunner {
+  return async (text) => {
+    const searchStart = options.searchStart ?? process.cwd()
+    const result = await runProcess(
+      resolvePhiCommand(searchStart, options.command),
+      ["scrub-stdin", "--json"],
+      text,
+      {
+        cwd: searchStart,
+        timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      },
+    )
+    if (!result.ok) return { ok: false, reason: result.reason }
 
-  let payload: CliPayload
-  try {
-    payload = JSON.parse(result.stdout) as CliPayload
-  } catch {
-    return { ok: false, reason: "invalid_json" }
-  }
-
-  if (payload.ok !== true) {
-    return {
-      ok: false,
-      reason: typeof payload.reason === "string" ? payload.reason : "redaction_failed",
+    let payload: CliPayload
+    try {
+      payload = JSON.parse(result.stdout) as CliPayload
+    } catch {
+      return { ok: false, reason: "invalid_json" }
     }
-  }
 
-  if (typeof payload.scrubbed_text !== "string" || payload.scrubbed_text.length === 0) {
-    return { ok: false, reason: "missing_scrubbed_text" }
-  }
-  if (typeof payload.session_id !== "string") {
-    return { ok: false, reason: "missing_session_id" }
-  }
-  if (!isSummary(payload.summary)) {
-    return { ok: false, reason: "invalid_summary" }
-  }
+    if (payload.ok !== true) {
+      return {
+        ok: false,
+        reason: typeof payload.reason === "string" ? payload.reason : "redaction_failed",
+      }
+    }
 
-  return {
-    ok: true,
-    scrubbed_text: payload.scrubbed_text,
-    session_id: payload.session_id,
-    summary: payload.summary,
+    if (typeof payload.scrubbed_text !== "string" || payload.scrubbed_text.length === 0) {
+      return { ok: false, reason: "missing_scrubbed_text" }
+    }
+    if (typeof payload.session_id !== "string") {
+      return { ok: false, reason: "missing_session_id" }
+    }
+    if (!isSummary(payload.summary)) {
+      return { ok: false, reason: "invalid_summary" }
+    }
+
+    return {
+      ok: true,
+      scrubbed_text: payload.scrubbed_text,
+      session_id: payload.session_id,
+      summary: payload.summary,
+    }
   }
 }
 
-function resolvePhiCommand() {
-  if (process.env.PHI_CLI_COMMAND) return process.env.PHI_CLI_COMMAND
+export const runPhiCli: PhiRunner = createPhiRunner()
 
-  let directory = process.cwd()
+function resolvePhiCommand(searchStart: string, command = process.env.PHI_CLI_COMMAND) {
+  if (command) return command
+
+  let directory = resolve(searchStart)
   const root = parse(directory).root
   while (true) {
     const candidate = join(directory, ".venv", "bin", "phi")
@@ -78,30 +99,49 @@ function runProcess(
   command: string,
   args: string[],
   stdin: string,
+  options: { cwd: string; timeoutMs: number },
 ): Promise<{ ok: true; stdout: string } | { ok: false; reason: string }> {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
       env: process.env,
+      cwd: options.cwd,
     })
     let stdout = ""
+    let settled = false
+
+    const settle = (result: { ok: true; stdout: string } | { ok: false; reason: string }) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      resolve(result)
+    }
+
+    const timeout = setTimeout(() => {
+      if (!child.killed) child.kill("SIGKILL")
+      settle({ ok: false, reason: "cli_timeout" })
+    }, options.timeoutMs)
 
     child.stdout.setEncoding("utf8")
     child.stdout.on("data", (chunk: string) => {
       stdout += chunk
     })
     child.stderr.resume()
+    child.stdin.on("error", () => {
+      if (!child.killed) child.kill("SIGKILL")
+      settle({ ok: false, reason: "stdin_pipe_failed" })
+    })
 
     child.on("error", () => {
-      resolve({ ok: false, reason: "cli_spawn_failed" })
+      settle({ ok: false, reason: "cli_spawn_failed" })
     })
 
     child.on("close", (code) => {
       if (code !== 0) {
-        resolve({ ok: false, reason: "cli_exit_nonzero" })
+        settle({ ok: false, reason: "cli_exit_nonzero" })
         return
       }
-      resolve({ ok: true, stdout })
+      settle({ ok: true, stdout })
     })
 
     child.stdin.end(stdin)

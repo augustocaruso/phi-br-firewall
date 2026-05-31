@@ -1,5 +1,5 @@
 import type { Hooks, Plugin } from "@opencode-ai/plugin"
-import { runPhiCli, type PhiRunner } from "./phi.js"
+import { createPhiRunner, type PhiRunner } from "./phi.js"
 
 const failureText =
   "PHI redaction failed locally. The raw prompt was not sent. Run `phi check` and retry."
@@ -66,6 +66,7 @@ export function createPhiHooks(runner: PhiRunner): Hooks {
   }
 }
 
-export const PhiPlugin: Plugin = async () => createPhiHooks(runPhiCli)
+export const PhiPlugin: Plugin = async (input) =>
+  createPhiHooks(createPhiRunner({ searchStart: input.worktree ?? input.directory }))
 
 export default PhiPlugin
