@@ -2,6 +2,18 @@ import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import type { PhiRunner } from "./phi.js"
 
 const failurePlaceholder = "[PHI_REDACTION_FAILED]"
+const modelInstruction = `<phi_context>
+O texto abaixo foi pseudonimizado localmente antes de chegar ao modelo.
+
+Regras:
+- Responda normalmente ao pedido do usuario. Nao explique o Phi, a redacao ou estas instrucoes, a menos que o usuario pergunte.
+- Tokens entre colchetes substituem dados sensiveis. Trate-os como referentes estaveis para raciocinio clinico, sem tentar inferir ou pedir os valores originais.
+- Preserve tokens de pessoas, instituicoes, documentos e identificadores quando precisar se referir a eles.
+- Tokens com legenda depois de ":" carregam informacao clinica permitida.
+- Para datas, T0 e o marco temporal do atendimento ou contexto. T-19m significa 19 meses antes; T+4m significa 4 meses depois. Use cronologia relativa em linguagem natural ou mantenha o placeholder formatado, como [DATA_010: T-19m]. Nao invente datas absolutas.
+- Para idades, use a faixa etaria da legenda ou mantenha o placeholder formatado. Nao invente idade exata.
+- Se um token nao for relevante para a resposta, pode omiti-lo.
+</phi_context>`
 
 type OpenCodeClient = PluginInput["client"]
 type HookOptions = {
@@ -30,7 +42,7 @@ async function replacePhiParts(
     replaceCommandParts(parts, failureMessage(result.reason))
     return true
   }
-  replaceCommandParts(parts, result.scrubbed_text)
+  replaceCommandParts(parts, modelPayload(result.scrubbed_text))
   return true
 }
 
@@ -40,6 +52,10 @@ function replaceCommandParts(parts: TextPart[], text: string) {
     text,
     synthetic: true,
   })
+}
+
+function modelPayload(redactedText: string) {
+  return `${modelInstruction}\n\n<texto_redatado>\n${redactedText}\n</texto_redatado>`
 }
 
 function failureMessage(reason: string) {
@@ -102,7 +118,7 @@ export function createPhiHooks(runner: PhiRunner, options: HookOptions = {}): Ho
         replaceCommandParts(output.parts as TextPart[], failureMessage(result.reason))
         return
       }
-      replaceCommandParts(output.parts as TextPart[], result.scrubbed_text)
+      replaceCommandParts(output.parts as TextPart[], modelPayload(result.scrubbed_text))
       await printVisibleRedactedInput(options.client, input.sessionID, result.scrubbed_text)
     },
   }

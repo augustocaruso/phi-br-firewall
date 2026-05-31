@@ -26,6 +26,18 @@ function makePromptClient() {
   }
 }
 
+function expectModelPhiPayload(value: unknown, redactedText: string) {
+  expect(typeof value).toBe("string")
+  const text = String(value)
+  expect(text).toContain("<phi_context>")
+  expect(text).toContain("Responda normalmente ao pedido do usuario")
+  expect(text).toContain("sem tentar inferir ou pedir os valores originais")
+  expect(text).toContain("[DATA_010: T-19m]")
+  expect(text).toContain("mantenha o placeholder formatado")
+  expect(text).toContain("<texto_redatado>")
+  expect(text).toContain(`${redactedText}\n</texto_redatado>`)
+}
+
 describe("Phi OpenCode plugin", () => {
   test("entrypoint exposes only the server plugin function", async () => {
     const module = await import("../src/plugin.js")
@@ -76,13 +88,11 @@ describe("Phi OpenCode plugin", () => {
     ).resolves.toBeUndefined()
 
     expect(output.parts).toBe(originalParts)
-    expect(output.parts).toEqual([
-      {
-        type: "text",
-        text: "Paciente [PACIENTE_001] CPF [CPF_001]",
-        synthetic: true,
-      },
-    ])
+    const replacedParts = output.parts as Array<{ type: string; text?: string; synthetic?: boolean }>
+    expect(replacedParts).toHaveLength(1)
+    expect(replacedParts[0]?.type).toBe("text")
+    expect(replacedParts[0]?.synthetic).toBe(true)
+    expectModelPhiPayload(replacedParts[0]?.text, "Paciente [PACIENTE_001] CPF [CPF_001]")
     expect(JSON.stringify(output.parts)).not.toContain("Joao")
     expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
   })
@@ -107,13 +117,10 @@ describe("Phi OpenCode plugin", () => {
       output as never,
     )
 
-    expect(output.parts).toEqual([
-      {
-        type: "text",
-        text: "Paciente [PACIENTE_001] CPF [CPF_001]",
-        synthetic: true,
-      },
-    ])
+    expect(output.parts).toHaveLength(1)
+    expect(output.parts[0]?.type).toBe("text")
+    expect(output.parts[0]?.synthetic).toBe(true)
+    expectModelPhiPayload(output.parts[0]?.text, "Paciente [PACIENTE_001] CPF [CPF_001]")
     expect(promptClient.promptCalls).toEqual([
       {
         path: { id: "session-1" },
@@ -129,6 +136,7 @@ describe("Phi OpenCode plugin", () => {
         },
       },
     ])
+    expect(JSON.stringify(promptClient.promptCalls)).not.toContain("phi_context")
     expect(JSON.stringify(promptClient.promptCalls)).not.toContain("Joao")
     expect(JSON.stringify(promptClient.promptCalls)).not.toContain("123.456.789-09")
   })
@@ -263,13 +271,11 @@ describe("Phi OpenCode plugin", () => {
     )
 
     expect(output.parts).toBe(originalParts)
-    expect(output.parts).toEqual([
-      {
-        type: "text",
-        text: "Paciente [PACIENTE_001] CPF [CPF_001]",
-        synthetic: true,
-      },
-    ])
+    const replacedParts = output.parts as Array<{ type: string; text?: string; synthetic?: boolean }>
+    expect(replacedParts).toHaveLength(1)
+    expect(replacedParts[0]?.type).toBe("text")
+    expect(replacedParts[0]?.synthetic).toBe(true)
+    expectModelPhiPayload(replacedParts[0]?.text, "Paciente [PACIENTE_001] CPF [CPF_001]")
     expect(JSON.stringify(output.parts)).not.toContain("Joao")
     expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
     expect(JSON.stringify(output.parts)).not.toContain("raw:")
@@ -309,13 +315,13 @@ describe("Phi OpenCode plugin", () => {
     await hooks["experimental.chat.messages.transform"]?.({}, output as never)
 
     expect(output.messages[0]?.parts).toBe(originalParts)
-    expect(output.messages[0]?.parts).toEqual([
-      {
-        type: "text",
-        text: "Paciente [PACIENTE_001] CPF [CPF_001]",
-        synthetic: true,
-      },
-    ])
+    const parts = output.messages[0]?.parts as
+      | Array<{ type: string; text?: string; synthetic?: boolean }>
+      | undefined
+    expect(parts).toHaveLength(1)
+    expect(parts?.[0]?.type).toBe("text")
+    expect(parts?.[0]?.synthetic).toBe(true)
+    expectModelPhiPayload(parts?.[0]?.text, "Paciente [PACIENTE_001] CPF [CPF_001]")
     expect(JSON.stringify(output.messages)).not.toContain("Joao")
     expect(JSON.stringify(output.messages)).not.toContain("123.456.789-09")
     expect(JSON.stringify(output.messages)).not.toContain("raw:")
