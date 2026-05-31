@@ -46,3 +46,40 @@ def test_scrub_respects_non_persistent_mapping_policy(tmp_path) -> None:
     assert "[CPF_001]" in scrub.scrubbed_text
     assert "935.411.347-80" not in scrub.scrubbed_text
     assert list(tmp_path.rglob("*")) == []
+
+
+def test_scrub_covers_dermatopediatrics_note_leak_patterns(tmp_path) -> None:
+    policy = PhiPolicy()
+    policy.mapping.base_dir = str(tmp_path)
+    text = """
+AMBULATORIO DERMATOPEDIATRIA HUB - 20/10/2024
+Paciente: Crianca Teste: 7 anos e 4 meses
+Data de Nascimento: 10/06/2017
+Prontuario: 123456
+Acompanhante: Lara (mae)
+QP: dermatite ha 3 anos
+Quando tinha apenas 1 mes de idade, apresentou lesao.
+Aos 4 anos de idade, surgiram lesoes.
+Em agosto/2023, apresentou placas.
+Retorno em dezembro/2024.
+Mateus (interno eletivo) sob orientacao de Dra Paula Ramos.
+"""
+
+    scrub = scrub_text(text, policy)
+
+    assert scrub.ok is True
+    assert "HUB" not in scrub.scrubbed_text
+    assert "Lara" not in scrub.scrubbed_text
+    assert "Mateus" not in scrub.scrubbed_text
+    assert "Paula Ramos" not in scrub.scrubbed_text
+    assert "7 anos e 4 meses" not in scrub.scrubbed_text
+    assert "1 mes de idade" not in scrub.scrubbed_text
+    assert "4 anos de idade" not in scrub.scrubbed_text
+    assert "agosto/2023" not in scrub.scrubbed_text
+    assert "dezembro/2024" not in scrub.scrubbed_text
+    assert "ha 3 anos" in scrub.scrubbed_text
+    assert "[INSTITUICAO_" in scrub.scrubbed_text
+    assert "[FAMILIAR_" in scrub.scrubbed_text
+    assert "[PROFISSIONAL_" in scrub.scrubbed_text
+    assert "[IDADE_" in scrub.scrubbed_text
+    assert "[DATA_" in scrub.scrubbed_text

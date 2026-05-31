@@ -5,7 +5,11 @@ import re
 from presidio_analyzer import EntityRecognizer, RecognizerResult
 from presidio_analyzer.nlp_engine import NlpArtifacts
 
-from phi_br_core.entities import BR_HEALTHCARE_PROFESSIONAL_NAME, BR_PATIENT_NAME
+from phi_br_core.entities import (
+    BR_FAMILY_MEMBER_NAME,
+    BR_HEALTHCARE_PROFESSIONAL_NAME,
+    BR_PATIENT_NAME,
+)
 
 _NAME_WORD = r"[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][A-Za-zÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇáàâãéèêíìîóòôõúùûç]+"
 _CONNECTOR = r"(?:da|de|do|das|dos|e)"
@@ -68,15 +72,42 @@ _WORD_PATTERN = re.compile(r"\w+", flags=re.UNICODE)
 class ClinicalNameContextRecognizer(EntityRecognizer):
     def __init__(self) -> None:
         super().__init__(
-            supported_entities=[BR_PATIENT_NAME, BR_HEALTHCARE_PROFESSIONAL_NAME],
+            supported_entities=[
+                BR_PATIENT_NAME,
+                BR_FAMILY_MEMBER_NAME,
+                BR_HEALTHCARE_PROFESSIONAL_NAME,
+            ],
             supported_language="pt",
-            context=["paciente", "dra", "dr", "medico", "médico", "profissional"],
+            context=[
+                "paciente",
+                "acompanhante",
+                "mae",
+                "mãe",
+                "pai",
+                "dra",
+                "dr",
+                "interno",
+                "medico",
+                "médico",
+                "profissional",
+            ],
         )
         self._patient_pattern = re.compile(
             rf"\b(?i:paciente|usu[aá]rio|cliente){_LABEL_SEPARATOR}(?P<name>{_NAME})\b",
         )
+        self._family_label_pattern = re.compile(
+            rf"\b(?i:acompanhante|respons[aá]vel|m[aã]e|pai|filh[ao]|av[oóô])"
+            rf"{_LABEL_SEPARATOR}(?P<name>{_NAME})\b",
+        )
+        self._family_parenthetical_pattern = re.compile(
+            rf"\b(?P<name>{_NAME})\s*\((?i:m[aã]e|pai|filh[ao]|av[oóô])\)",
+        )
         self._professional_pattern = re.compile(
             rf"\b(?i:dr\.?|dra\.?|m[eé]dico|m[eé]dica){_LABEL_SEPARATOR}(?P<name>{_NAME})\b",
+        )
+        self._professional_role_pattern = re.compile(
+            rf"\b(?P<name>{_NAME})\s*"
+            r"\((?i:intern[oa]|residente|staff|preceptor[ao]?|m[eé]dic[oa])[^)]*\)",
         )
 
     def load(self) -> None:
@@ -93,6 +124,23 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
         requested = set(entities)
         if BR_PATIENT_NAME in requested:
             results.extend(self._results_for(text, self._patient_pattern, BR_PATIENT_NAME, 0.75))
+        if BR_FAMILY_MEMBER_NAME in requested:
+            results.extend(
+                self._results_for(
+                    text,
+                    self._family_label_pattern,
+                    BR_FAMILY_MEMBER_NAME,
+                    0.74,
+                )
+            )
+            results.extend(
+                self._results_for(
+                    text,
+                    self._family_parenthetical_pattern,
+                    BR_FAMILY_MEMBER_NAME,
+                    0.76,
+                )
+            )
         if BR_HEALTHCARE_PROFESSIONAL_NAME in requested:
             results.extend(
                 self._results_for(
@@ -100,6 +148,14 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
                     self._professional_pattern,
                     BR_HEALTHCARE_PROFESSIONAL_NAME,
                     0.78,
+                )
+            )
+            results.extend(
+                self._results_for(
+                    text,
+                    self._professional_role_pattern,
+                    BR_HEALTHCARE_PROFESSIONAL_NAME,
+                    0.76,
                 )
             )
         return results

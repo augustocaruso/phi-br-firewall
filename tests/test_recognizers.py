@@ -51,6 +51,7 @@ def test_detects_patient_and_professional_names_by_context() -> None:
     types = entity_types_for("Paciente Joao da Silva avaliado pela Dra Ana Souza.")
     assert "BR_PATIENT_NAME" in types
     assert "BR_HEALTHCARE_PROFESSIONAL_NAME" in types
+    assert "BR_FAMILY_MEMBER_NAME" not in types
 
 
 def test_detects_uppercase_names_by_context() -> None:
@@ -66,6 +67,33 @@ def test_detects_names_after_label_separators() -> None:
 
     assert "BR_PATIENT_NAME" in patient_types
     assert "BR_HEALTHCARE_PROFESSIONAL_NAME" in professional_types
+
+
+def test_detects_family_member_names_by_clinical_context() -> None:
+    text = "Acompanhante: Lara (mae). Mae relata piora."
+    findings = findings_for(text)
+
+    family_names = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_FAMILY_MEMBER_NAME"
+    ]
+
+    assert family_names == ["Lara"]
+
+
+def test_detects_intern_name_as_healthcare_professional() -> None:
+    text = "Mateus (interno eletivo) sob orientacao de Dra Paula Ramos."
+    findings = findings_for(text)
+
+    professional_names = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_HEALTHCARE_PROFESSIONAL_NAME"
+    ]
+
+    assert "Mateus" in professional_names
+    assert "Paula Ramos" in professional_names
 
 
 def test_name_context_stops_before_next_field_label() -> None:
@@ -120,6 +148,19 @@ def test_institution_context_stops_before_next_field_label() -> None:
     assert "BR_PHONE" in {result.entity_type for result in findings}
 
 
+def test_detects_healthcare_institution_acronym_without_section_acronyms() -> None:
+    text = "AMBULATORIO DERMATOPEDIATRIA HUB. QP dermatite. HDA sem febre. BEG."
+    findings = findings_for(text)
+
+    institutions = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_INSTITUTION"
+    ]
+
+    assert institutions == ["HUB"]
+
+
 def test_detects_institution_after_label_separator() -> None:
     types = entity_types_for("Encaminhada para Hospital: Santa Lucia.")
 
@@ -138,3 +179,37 @@ def test_detects_url_with_email_like_path_as_contextual_identifier() -> None:
 
     assert "BR_CONTEXTUAL_IDENTIFIER" in types
     assert "BR_EMAIL" in types
+
+
+def test_detects_pediatric_ages_without_symptom_duration() -> None:
+    text = (
+        "Paciente: Crianca Teste: 7 anos e 4 meses. "
+        "Dermatite ha 3 anos. Quando tinha apenas 1 mes de idade. "
+        "Aos 4 anos de idade surgiram lesoes."
+    )
+    findings = findings_for(text)
+
+    ages = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_AGE"
+    ]
+
+    assert "7 anos e 4 meses" in ages
+    assert "1 mes de idade" in ages
+    assert "4 anos de idade" in ages
+    assert "3 anos" not in ages
+
+
+def test_detects_brazilian_text_month_dates() -> None:
+    text = "Em agosto/2023 houve piora. Retorno em dezembro/2024."
+    findings = findings_for(text)
+
+    dates = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_DATE"
+    ]
+
+    assert "agosto/2023" in dates
+    assert "dezembro/2024" in dates

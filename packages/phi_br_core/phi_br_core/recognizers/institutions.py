@@ -52,9 +52,24 @@ class InstitutionRecognizer(PatternRecognizer):
                         r"[\wÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇáàâãéèêíìîóòôõúùûç .'-]{2,60}"
                     ),
                     score=0.7,
+                ),
+                Pattern(
+                    name="healthcare_institution_acronym",
+                    regex=r"\b(?:HUB|HRAN|HRT|HMIB|HCB|ICDF)\b",
+                    score=0.72,
                 )
             ],
-            context=["hospital", "clinica", "clínica", "ubs", "upa", "laboratorio"],
+            context=[
+                "ambulatorio",
+                "ambulatório",
+                "dermatopediatria",
+                "hospital",
+                "clinica",
+                "clínica",
+                "ubs",
+                "upa",
+                "laboratorio",
+            ],
             supported_language="pt",
         )
 

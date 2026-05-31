@@ -15,6 +15,7 @@ from spacy.tokens import Doc
 from spacy.vocab import Vocab
 
 from phi_br_core.policy import PhiPolicy
+from phi_br_core.recognizers.age_br import AgeBrRecognizer
 from phi_br_core.recognizers.cep import CepRecognizer
 from phi_br_core.recognizers.clinical_ids import ClinicalIdRecognizer
 from phi_br_core.recognizers.cns import CnsRecognizer
@@ -144,6 +145,7 @@ def build_registry(languages: list[str] | None = None) -> RecognizerRegistry:
     registry.add_recognizer(ContextualIdentifierRecognizer())
     registry.add_recognizer(ClinicalIdRecognizer())
     registry.add_recognizer(DateBrRecognizer())
+    registry.add_recognizer(AgeBrRecognizer())
     registry.add_recognizer(InstitutionRecognizer())
     registry.add_recognizer(ClinicalNameContextRecognizer())
     _remove_conflicting_predefined_recognizers(registry)
@@ -151,7 +153,12 @@ def build_registry(languages: list[str] | None = None) -> RecognizerRegistry:
 
 
 def _remove_conflicting_predefined_recognizers(registry: RecognizerRegistry) -> None:
-    for recognizer_name in ("EmailRecognizer", "PhoneRecognizer", "UrlRecognizer"):
+    for recognizer_name in (
+        "DateRecognizer",
+        "EmailRecognizer",
+        "PhoneRecognizer",
+        "UrlRecognizer",
+    ):
         registry.remove_recognizer(recognizer_name)
 
 
