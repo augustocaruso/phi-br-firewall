@@ -1,18 +1,66 @@
-# phi-br-presidio-firewall
+# phi-br-firewall
 
 Local-first PHI/PII redaction for Brazilian Portuguese clinical text.
 
-The MVP uses Microsoft Presidio for local detection, stable local placeholders
-for reversible pseudonymization, and an OpenCode `/phi` command so raw clinical
-text is redacted before it reaches a model.
+Phi uses Microsoft Presidio plus Brazilian healthcare recognizers to redact
+text before it reaches an AI model. It keeps reversible placeholder mappings on
+your machine so you can restore text locally when needed.
 
-## Mental model
+## Important Disclaimer
 
-`phi` has two jobs:
+Phi reduces the risk of leaking PHI/PII, but it is not perfect and must not be
+treated as a guarantee of de-identification. It can miss names, institutions,
+addresses, dates, gendered clues, rare identifiers, or context-specific details.
+
+Always review redacted text before sending it to any external model or service.
+This project is not a HIPAA, LGPD, institutional compliance, or medical safety
+certification.
+
+## Install Beta From GitHub
+
+macOS/Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/augustocaruso/phi-br-firewall/main/scripts/install.sh | bash
+```
+
+The installer:
+
+1. installs `uv` if it is missing;
+2. clones this repo into `~/.local/share/phi-br-firewall/repo`;
+3. installs the `phi` CLI with `uv tool install`;
+4. installs an OpenCode plugin wrapper in `~/.config/opencode/plugins/`;
+5. runs `phi check`.
+
+Then restart OpenCode and use:
+
+```text
+/phi <texto livre com prontuario>
+```
+
+To inspect the installer before running it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/augustocaruso/phi-br-firewall/main/scripts/install.sh -o /tmp/phi-install.sh
+less /tmp/phi-install.sh
+bash /tmp/phi-install.sh
+```
+
+To update, run the installer again.
+
+To uninstall:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/augustocaruso/phi-br-firewall/main/scripts/uninstall.sh | bash
+```
+
+## Mental Model
+
+Phi has two jobs:
 
 1. detect PHI/PII locally with Presidio plus Brazilian healthcare recognizers;
-2. replace each value with a stable placeholder and keep the reversible mapping
-   only on this machine.
+2. replace each value with a stable placeholder while keeping the reversible
+   mapping local.
 
 Example:
 
@@ -28,18 +76,21 @@ Paciente [PACIENTE_001], CPF [CPF_001].
 
 The model sees the placeholder text. The mapping stays local.
 
-## Setup
+## OpenCode Workflow
 
-```bash
-uv sync
-uv tool install -e . --force
-phi check
+In OpenCode:
+
+```text
+/phi Paciente Joao da Silva, CPF 935.411.347-80. Resuma o caso.
 ```
 
-`phi check` verifies imports, Presidio startup, custom recognizers, a simple
-scrub/audit pass, and write access to the local session directory.
+The plugin redacts the prompt locally, prints the redacted input in the
+transcript, and sends only the redacted text to the model.
 
-## Clipboard workflow
+If redaction fails, the plugin fails closed: the raw prompt is not sent to the
+model.
+
+## Clipboard Workflow
 
 Copy clinical text to the clipboard, then run:
 
@@ -47,22 +98,22 @@ Copy clinical text to the clipboard, then run:
 phi redact
 ```
 
-The clipboard is replaced with the redacted text. The command prints only a
-small JSON status object, never the original clinical text.
+The clipboard is replaced with redacted text. The command prints only a small
+JSON status object, never the original clinical text.
 
-After the LLM returns text containing placeholders, copy that text to the
-clipboard and run:
+After an LLM returns text containing placeholders, copy that text and run:
 
 ```bash
 phi restore
 ```
 
-The clipboard is replaced with restored local text. Restore also avoids printing
+The clipboard is replaced with locally restored text. Restore avoids printing
 the recovered PHI to stdout.
 
 Useful lifecycle commands:
 
 ```bash
+phi check
 phi status
 phi purge
 phi purge --all
@@ -122,9 +173,9 @@ redacted = redact_text(raw_text, policy)
 restored = restore_active_text(redacted.redacted_text, policy)
 ```
 
-## Sessions and mappings
+## Sessions And Mappings
 
-Runtime mappings live under:
+Runtime mappings live under the current working directory by default:
 
 ```text
 .tmp/phi/<session_id>/mapping.json
@@ -137,61 +188,39 @@ The placeholder index lives at:
 ```
 
 These files are ignored by Git. They are needed for reversible restore, so keep
-them only as long as the session is useful. Use `phi purge --all` to remove all
-local sessions.
+them only as long as the session is useful. Use `phi purge --all` from the
+relevant project folder to remove local sessions.
 
-Multiple active sessions can coexist. The CLI resolves ownership from the
-placeholder numbers in the text, so users do not need to pass session ids.
+Multiple active sessions can coexist. Phi resolves ownership from the
+placeholder numbers in the text, so users do not need to pass session IDs.
 
-## OpenCode workflow
+## Current Limitations
 
-Load the local OpenCode plugin from:
+- Beta quality. Expect false negatives and false positives.
+- MVP recognizers are Presidio-first with regex/context heuristics, not a full
+  Portuguese clinical NLP pipeline.
+- Local mappings are not encrypted yet.
+- Redaction does not remove every clinically identifying clue.
+- Restore is local and placeholder-based; it does not rewrite free prose that no
+  longer contains placeholders.
+- You are responsible for reviewing redacted text before model use.
 
-```text
-packages/phi_br_firewall_opencode
-```
-
-Then use:
-
-```text
-/phi <texto livre com prontuario>
-```
-
-The plugin calls `phi api redact --json` through stdin and mutates the OpenCode
-message parts in place. On success, only the redacted text is sent onward. On
-failure, the model-facing text becomes:
-
-```text
-PHI redaction failed locally. The raw prompt was not sent. Run `phi check` and retry.
-```
-
-OpenCode does not automatically restore placeholders inside the transcript in
-this MVP. Restoration stays local through `phi restore`.
-
-## OpenCode proof
-
-Task 2 proved the command-replacement path with synthetic text only:
+## Development
 
 ```bash
-opencode run --command phi --title phi-proof-task2-20260530 "Paciente Joao CPF 123.456.789-09" --format json --print-logs --log-level INFO
-```
-
-The OpenCode session database stored
-`PHI proof replacement: [PACIENTE_001] [CPF_001]` for the user text part and did
-not store the synthetic raw name or CPF in that proof session.
-
-Task 8 added the CLI-backed runner. Automated coverage verifies that the runner
-passes raw text via stdin, resolves the project-local `phi`, times out safely,
-fails closed on pipe errors, and avoids preserving raw metadata fields in
-model-facing OpenCode parts.
-
-## Development checks
-
-```bash
+uv sync
 uv run pytest -v
 uv run ruff check packages tests
 uv run mypy packages/phi_br_core/phi_br_core
+
 cd packages/phi_br_firewall_opencode
 npm run typecheck
 npm test -- --run
+```
+
+Manual local install from a checkout:
+
+```bash
+uv tool install -e . --force
+phi check
 ```

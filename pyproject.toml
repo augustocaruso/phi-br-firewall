@@ -15,6 +15,11 @@ dependencies = [
 [project.scripts]
 phi = "phi_br_core.cli.main:app"
 
+[project.urls]
+Homepage = "https://github.com/augustocaruso/phi-br-firewall"
+Repository = "https://github.com/augustocaruso/phi-br-firewall"
+Issues = "https://github.com/augustocaruso/phi-br-firewall/issues"
+
 [dependency-groups]
 dev = [
   "pytest",
