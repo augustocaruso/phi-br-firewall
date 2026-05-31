@@ -32,7 +32,8 @@ The model sees the placeholder text. The mapping stays local.
 
 ```bash
 uv sync
-uv run phi check
+uv tool install -e . --force
+phi check
 ```
 
 `phi check` verifies imports, Presidio startup, custom recognizers, a simple
@@ -43,7 +44,7 @@ scrub/audit pass, and write access to the local session directory.
 Copy clinical text to the clipboard, then run:
 
 ```bash
-uv run phi redact
+phi redact
 ```
 
 The clipboard is replaced with the redacted text. The command prints only a
@@ -53,7 +54,7 @@ After the LLM returns text containing placeholders, copy that text to the
 clipboard and run:
 
 ```bash
-uv run phi restore
+phi restore
 ```
 
 The clipboard is replaced with restored local text. Restore also avoids printing
@@ -62,9 +63,9 @@ the recovered PHI to stdout.
 Useful lifecycle commands:
 
 ```bash
-uv run phi status
-uv run phi purge
-uv run phi purge --all
+phi status
+phi purge
+phi purge --all
 ```
 
 Every public command runs expired-session cleanup first.
@@ -84,8 +85,8 @@ The placeholder index lives at:
 ```
 
 These files are ignored by Git. They are needed for reversible restore, so keep
-them only as long as the session is useful. Use `uv run phi purge --all` to
-remove all local sessions.
+them only as long as the session is useful. Use `phi purge --all` to remove all
+local sessions.
 
 Multiple active sessions can coexist. The CLI resolves ownership from the
 placeholder numbers in the text, so users do not need to pass session ids.
