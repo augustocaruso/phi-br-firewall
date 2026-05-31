@@ -1,8 +1,7 @@
 import type { Hooks } from "@opencode-ai/plugin"
 import type { PhiRunner } from "./phi.js"
 
-const failureText =
-  "PHI redaction failed locally. The raw prompt was not sent. Run `phi check` and retry."
+const failurePlaceholder = "[PHI_REDACTION_FAILED]"
 
 function isPhiText(text: string) {
   return text.trim().startsWith("/phi ")
@@ -22,8 +21,8 @@ async function replacePhiParts(
   const firstTextPart = parts.find((part) => part.type === "text")
   if (!firstTextPart?.text || !isPhiText(firstTextPart.text)) return false
   const result = await runner(phiText(firstTextPart.text), sessionID)
-  const text = result.ok ? result.scrubbed_text : failureText
-  replaceCommandParts(parts, text)
+  if (!result.ok) failClosed(parts, result.reason)
+  replaceCommandParts(parts, result.scrubbed_text)
   return true
 }
 
@@ -33,6 +32,11 @@ function replaceCommandParts(parts: TextPart[], text: string) {
     text,
     synthetic: true,
   })
+}
+
+function failClosed(parts: TextPart[], reason: string): never {
+  replaceCommandParts(parts, failurePlaceholder)
+  throw new Error(`PHI_REDACTION_FAILED: raw prompt blocked before model dispatch (${reason})`)
 }
 
 export function createPhiHooks(runner: PhiRunner): Hooks {
@@ -61,7 +65,8 @@ export function createPhiHooks(runner: PhiRunner): Hooks {
     async "command.execute.before"(input, output) {
       if (input.command !== "phi") return
       const result = await runner(input.arguments, input.sessionID)
-      replaceCommandParts(output.parts as TextPart[], result.ok ? result.scrubbed_text : failureText)
+      if (!result.ok) failClosed(output.parts as TextPart[], result.reason)
+      replaceCommandParts(output.parts as TextPart[], result.scrubbed_text)
     },
   }
 }

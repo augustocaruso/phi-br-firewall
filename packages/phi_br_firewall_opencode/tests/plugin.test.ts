@@ -71,7 +71,7 @@ describe("Phi OpenCode plugin", () => {
     expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
   })
 
-  test("blocks command output safely when redaction fails", async () => {
+  test("aborts command execution instead of sending a diagnostic prompt when redaction fails", async () => {
     const hooks = createPhiHooks(async () => ({
       ok: false,
       reason: "audit_failed",
@@ -80,25 +80,90 @@ describe("Phi OpenCode plugin", () => {
     const output = { parts: [] as Array<{ type: "text"; text: string; synthetic?: boolean }> }
     const originalParts = output.parts
 
+    await expect(
+      hooks["command.execute.before"]?.(
+        {
+          command: "phi",
+          sessionID: "session-1",
+          arguments: "Paciente Joao CPF 123.456.789-09",
+        },
+        output as never,
+      ),
+    ).rejects.toThrow("PHI_REDACTION_FAILED")
+
+    expect(output.parts).toBe(originalParts)
+    expect(output.parts).toEqual([
+      {
+        type: "text",
+        text: "[PHI_REDACTION_FAILED]",
+        synthetic: true,
+      },
+    ])
+    expect(JSON.stringify(output.parts)).not.toContain("Joao")
+    expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
+    expect(JSON.stringify(output.parts)).not.toContain("phi check")
+  })
+
+  test("aborts slash phi chat messages without leaking raw text when redaction fails", async () => {
+    const hooks = createPhiHooks(async () => ({
+      ok: false,
+      reason: "cli_timeout",
+    }))
+
+    const output = {
+      message: {} as never,
+      parts: [
+        {
+          id: "part-1",
+          sessionID: "session-1",
+          messageID: "message-1",
+          type: "text",
+          text: "/phi Paciente Joao CPF 123.456.789-09",
+          metadata: "raw: Paciente Joao CPF 123.456.789-09",
+        },
+      ],
+    }
+    const originalParts = output.parts
+
+    await expect(
+      hooks["chat.message"]?.(
+        {
+          sessionID: "session-1",
+        },
+        output as never,
+      ),
+    ).rejects.toThrow("PHI_REDACTION_FAILED")
+
+    expect(output.parts).toBe(originalParts)
+    expect(output.parts).toEqual([
+      {
+        type: "text",
+        text: "[PHI_REDACTION_FAILED]",
+        synthetic: true,
+      },
+    ])
+    expect(JSON.stringify(output.parts)).not.toContain("Joao")
+    expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
+    expect(JSON.stringify(output.parts)).not.toContain("phi check")
+  })
+
+  test("ignores non-phi commands", async () => {
+    const hooks = createPhiHooks(async () => {
+      throw new Error("runner should not be called")
+    })
+
+    const output = { parts: [] as Array<{ type: "text"; text: string; synthetic?: boolean }> }
+
     await hooks["command.execute.before"]?.(
       {
-        command: "phi",
+        command: "other",
         sessionID: "session-1",
         arguments: "Paciente Joao CPF 123.456.789-09",
       },
       output as never,
     )
 
-    expect(output.parts).toBe(originalParts)
-    expect(output.parts).toEqual([
-      {
-        type: "text",
-        text: "PHI redaction failed locally. The raw prompt was not sent. Run `phi check` and retry.",
-        synthetic: true,
-      },
-    ])
-    expect(JSON.stringify(output.parts)).not.toContain("Joao")
-    expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
+    expect(output.parts).toEqual([])
   })
 
   test("redacts slash phi chat messages before model dispatch", async () => {
