@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
-import PhiPlugin, { createPhiHooks } from "../src/plugin.js"
+import { createPhiHooks } from "../src/hooks.js"
+import { server } from "../src/plugin.js"
 
 const pluginInput = {
   client: {} as never,
@@ -12,8 +13,14 @@ const pluginInput = {
 }
 
 describe("Phi OpenCode plugin", () => {
+  test("entrypoint exposes only the server plugin function", async () => {
+    const module = await import("../src/plugin.js")
+
+    expect(Object.keys(module).sort()).toEqual(["server"])
+  })
+
   test("registers the phi command in OpenCode config", async () => {
-    const hooks = await PhiPlugin(pluginInput)
+    const hooks = await server(pluginInput)
     const config = {}
 
     await hooks.config?.(config as never)
