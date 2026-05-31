@@ -8,7 +8,9 @@ from pathlib import Path
 from secrets import token_hex
 from typing import Any
 
-from phi_br_core.mapping import write_json_atomic
+from phi_br_core.mapping import PlaceholderIndex, write_json_atomic
+
+SAFE_SESSION_SOURCES = {"cli", "core", "opencode", "opencode:/phi", "test", "unknown"}
 
 
 @dataclass(frozen=True)
@@ -21,13 +23,15 @@ class SessionRecord:
 
 
 class SessionStore:
-    def __init__(self, base_dir: Path) -> None:
+    def __init__(self, base_dir: Path, placeholder_index: PlaceholderIndex | None = None) -> None:
         self.base_dir = base_dir
+        self.placeholder_index = placeholder_index
 
     def create(
         self, source: str, now: datetime | None = None, ttl_hours: int = 24
     ) -> SessionRecord:
         created_at = self._normalize_datetime(now)
+        safe_source = self._sanitize_source(source)
         expires_at = created_at + timedelta(hours=ttl_hours)
         session_id = f"phi-{created_at.strftime('%Y%m%d-%H%M%S')}-{token_hex(3)}"
         path = self.session_path(session_id)
@@ -37,7 +41,7 @@ class SessionStore:
             path=path,
             created_at=created_at,
             expires_at=expires_at,
-            source=source,
+            source=safe_source,
         )
         write_json_atomic(path / "metadata.json", self._metadata_payload(record))
         return record
@@ -61,6 +65,8 @@ class SessionStore:
                 continue
             self._delete_session_dir(path)
             purged.append(record.session_id)
+        if self.placeholder_index is not None:
+            self.placeholder_index.remove_sessions(purged)
         return purged
 
     def _read_record(self, path: Path) -> SessionRecord | None:
@@ -113,3 +119,7 @@ class SessionStore:
         if value.tzinfo is None:
             return value.replace(tzinfo=UTC)
         return value
+
+    @staticmethod
+    def _sanitize_source(source: str) -> str:
+        return source if source in SAFE_SESSION_SOURCES else "unknown"

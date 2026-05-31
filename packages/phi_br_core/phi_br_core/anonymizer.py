@@ -14,15 +14,14 @@ from phi_br_core.spans import resolve_overlaps
 class StablePlaceholderAnonymizer:
     def __init__(self, base_dir: Path | str = ".tmp/phi") -> None:
         self.base_dir = Path(base_dir)
-        self.sessions = SessionStore(self.base_dir)
         self.index = PlaceholderIndex(self.base_dir / "index.json")
+        self.sessions = SessionStore(self.base_dir, placeholder_index=self.index)
 
     def scrub(
         self, text: str, findings: list[PhiFinding], source: str = "unknown"
     ) -> PhiScrubResult:
         session = self.sessions.create(source=source)
         accepted = resolve_overlaps(findings)
-        counters: dict[str, int] = {}
         by_value: dict[tuple[str, str], str] = {}
         items: dict[str, dict[str, str]] = {}
         replacements: list[tuple[PhiFinding, str]] = []
@@ -32,9 +31,7 @@ class StablePlaceholderAnonymizer:
             placeholder_key = by_value.get((finding.entity_type, finding.text))
             if placeholder_key is None:
                 prefix = ENTITY_TO_PLACEHOLDER_PREFIX.get(finding.entity_type, finding.entity_type)
-                next_count = counters.get(prefix, 0) + 1
-                counters[prefix] = next_count
-                placeholder_key = f"{prefix}_{next_count:03d}"
+                placeholder_key = self.index.next_key(prefix)
                 by_value[(finding.entity_type, finding.text)] = placeholder_key
                 items[placeholder_key] = {
                     "value": finding.text,

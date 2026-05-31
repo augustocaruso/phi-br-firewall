@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import json
+from os import getpid
 from pathlib import Path
+from secrets import token_hex
 from typing import Any
 
 
 def write_json_atomic(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_name(f".{path.name}.tmp")
+    temp_path = path.with_name(f".{path.name}.{getpid()}.{token_hex(3)}.tmp")
     temp_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -25,6 +27,30 @@ class PlaceholderIndex:
         if session_id not in sessions:
             sessions.append(session_id)
         self._write(placeholders)
+
+    def next_key(self, prefix: str) -> str:
+        placeholders = self._read()
+        highest = 0
+        marker = f"{prefix}_"
+        for placeholder_key in placeholders:
+            if not placeholder_key.startswith(marker):
+                continue
+            suffix = placeholder_key.removeprefix(marker)
+            if suffix.isdecimal():
+                highest = max(highest, int(suffix))
+        return f"{prefix}_{highest + 1:03d}"
+
+    def remove_sessions(self, session_ids: list[str]) -> None:
+        if not session_ids:
+            return
+        removed = set(session_ids)
+        placeholders = self._read()
+        cleaned: dict[str, list[str]] = {}
+        for placeholder_key, sessions in placeholders.items():
+            active_sessions = [session_id for session_id in sessions if session_id not in removed]
+            if active_sessions:
+                cleaned[placeholder_key] = active_sessions
+        self._write(cleaned)
 
     def resolve(self, placeholder_keys: list[str]) -> dict[str, str]:
         placeholders = self._read()
