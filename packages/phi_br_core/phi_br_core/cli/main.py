@@ -4,6 +4,7 @@ import importlib
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -119,6 +120,37 @@ def redact() -> None:
             "ok": result.ok,
             "action": "clipboard_redacted",
             "printed_phi": False,
+            "session_id": result.session_id,
+            "summary": result.summary.model_dump(),
+        }
+    )
+
+
+@app.command(hidden=True)
+def scrub_stdin(
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON output."),
+) -> None:
+    """Internal stdin redaction for local integrations."""
+    if not json_output:
+        _echo_json({"ok": False, "reason": "json_required"})
+        raise typer.Exit(code=1)
+
+    try:
+        policy = _policy()
+        _purge_expired(policy)
+        result = scrub_text(sys.stdin.read(), policy)
+    except Exception as error:
+        _echo_json({"ok": False, "reason": "scrub_failed"})
+        raise typer.Exit(code=1) from error
+
+    if not result.ok:
+        _echo_json({"ok": False, "reason": "audit_failed"})
+        raise typer.Exit(code=1)
+
+    _echo_json(
+        {
+            "ok": True,
+            "scrubbed_text": result.scrubbed_text,
             "session_id": result.session_id,
             "summary": result.summary.model_dump(),
         }

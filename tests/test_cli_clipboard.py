@@ -239,3 +239,23 @@ def test_redact_does_not_write_clipboard_when_scrub_fails(
 
     assert result.exit_code != 0
     assert clipboard["text"] == "Paciente Joao da Silva."
+
+
+def test_scrub_stdin_outputs_safe_json_without_printing_phi(
+    monkeypatch, tmp_path: Path
+) -> None:
+    raw_text = "Paciente Joao da Silva, CPF 935.411.347-80."
+
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+
+    result = runner.invoke(app, ["scrub-stdin", "--json"], input=raw_text)
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert "[PACIENTE_001]" in payload["scrubbed_text"]
+    assert "[CPF_001]" in payload["scrubbed_text"]
+    assert payload["session_id"]
+    assert payload["summary"]["entities_replaced"] == 2
+    assert "Joao da Silva" not in result.stdout
+    assert "935.411.347-80" not in result.stdout

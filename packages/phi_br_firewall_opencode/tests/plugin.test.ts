@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import PhiPlugin from "../src/plugin.js"
+import PhiPlugin, { createPhiHooks } from "../src/plugin.js"
 
 const pluginInput = {
   client: {} as never,
@@ -22,14 +22,23 @@ describe("Phi OpenCode plugin", () => {
       command: {
         phi: {
           template: "$ARGUMENTS",
-          description: "PHI proof command",
+          description: "Redact PHI locally before sending text to the model",
         },
       },
     })
   })
 
-  test("replaces raw /phi arguments with safe text parts", async () => {
-    const hooks = await PhiPlugin(pluginInput)
+  test("uses runner redacted text for command output without replacing the parts array", async () => {
+    const hooks = createPhiHooks(async (text, sessionID) => {
+      expect(text).toBe("Paciente Joao CPF 123.456.789-09")
+      expect(sessionID).toBe("session-1")
+      return {
+        ok: true,
+        scrubbed_text: "Paciente [PACIENTE_001] CPF [CPF_001]",
+        session_id: "phi-session-1",
+        summary: { entities_replaced: 2, entity_types: ["BR_CPF", "BR_PATIENT_NAME"] },
+      }
+    })
 
     const output = { parts: [] as Array<{ type: "text"; text: string; synthetic?: boolean }> }
     const originalParts = output.parts
@@ -47,14 +56,55 @@ describe("Phi OpenCode plugin", () => {
     expect(output.parts).toEqual([
       {
         type: "text",
-        text: "PHI proof replacement: [PACIENTE_001] [CPF_001]",
+        text: "Paciente [PACIENTE_001] CPF [CPF_001]",
         synthetic: true,
       },
     ])
+    expect(JSON.stringify(output.parts)).not.toContain("Joao")
+    expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
   })
 
-  test("replaces slash phi chat messages before model dispatch", async () => {
-    const hooks = await PhiPlugin(pluginInput)
+  test("blocks command output safely when redaction fails", async () => {
+    const hooks = createPhiHooks(async () => ({
+      ok: false,
+      reason: "audit_failed",
+    }))
+
+    const output = { parts: [] as Array<{ type: "text"; text: string; synthetic?: boolean }> }
+    const originalParts = output.parts
+
+    await hooks["command.execute.before"]?.(
+      {
+        command: "phi",
+        sessionID: "session-1",
+        arguments: "Paciente Joao CPF 123.456.789-09",
+      },
+      output as never,
+    )
+
+    expect(output.parts).toBe(originalParts)
+    expect(output.parts).toEqual([
+      {
+        type: "text",
+        text: "PHI redaction failed locally. The raw prompt was not sent. Run `phi check` and retry.",
+        synthetic: true,
+      },
+    ])
+    expect(JSON.stringify(output.parts)).not.toContain("Joao")
+    expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
+  })
+
+  test("redacts slash phi chat messages before model dispatch", async () => {
+    const hooks = createPhiHooks(async (text, sessionID) => {
+      expect(text).toBe("Paciente Joao CPF 123.456.789-09")
+      expect(sessionID).toBe("session-1")
+      return {
+        ok: true,
+        scrubbed_text: "Paciente [PACIENTE_001] CPF [CPF_001]",
+        session_id: "phi-session-1",
+        summary: { entities_replaced: 2, entity_types: ["BR_CPF", "BR_PATIENT_NAME"] },
+      }
+    })
 
     const output = {
       message: {} as never,
@@ -84,14 +134,25 @@ describe("Phi OpenCode plugin", () => {
         sessionID: "session-1",
         messageID: "message-1",
         type: "text",
-        text: "PHI proof replacement: [PACIENTE_001] [CPF_001]",
+        text: "Paciente [PACIENTE_001] CPF [CPF_001]",
         synthetic: true,
       },
     ])
+    expect(JSON.stringify(output.parts)).not.toContain("Joao")
+    expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
   })
 
-  test("replaces slash phi messages during model transform", async () => {
-    const hooks = await PhiPlugin(pluginInput)
+  test("redacts slash phi messages during model transform", async () => {
+    const hooks = createPhiHooks(async (text, sessionID) => {
+      expect(text).toBe("Paciente Joao CPF 123.456.789-09")
+      expect(sessionID).toBe("session-1")
+      return {
+        ok: true,
+        scrubbed_text: "Paciente [PACIENTE_001] CPF [CPF_001]",
+        session_id: "phi-session-1",
+        summary: { entities_replaced: 2, entity_types: ["BR_CPF", "BR_PATIENT_NAME"] },
+      }
+    })
 
     const output = {
       messages: [
@@ -120,9 +181,11 @@ describe("Phi OpenCode plugin", () => {
         sessionID: "session-1",
         messageID: "message-1",
         type: "text",
-        text: "PHI proof replacement: [PACIENTE_001] [CPF_001]",
+        text: "Paciente [PACIENTE_001] CPF [CPF_001]",
         synthetic: true,
       },
     ])
+    expect(JSON.stringify(output.messages)).not.toContain("Joao")
+    expect(JSON.stringify(output.messages)).not.toContain("123.456.789-09")
   })
 })

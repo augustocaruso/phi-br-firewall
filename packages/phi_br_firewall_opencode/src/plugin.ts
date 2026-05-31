@@ -1,49 +1,75 @@
-import type { Plugin } from "@opencode-ai/plugin"
+import type { Hooks, Plugin } from "@opencode-ai/plugin"
+import { runPhiCli, type PhiRunner } from "./phi.js"
 
-const proofText = "PHI proof replacement: [PACIENTE_001] [CPF_001]"
+const failureText =
+  "PHI redaction failed locally. The raw prompt was not sent. Run `phi check` and retry."
 
 function isPhiText(text: string) {
   return text.trim().startsWith("/phi ")
 }
 
-function replacePhiParts<T extends { type: string; text?: string; synthetic?: boolean }>(parts: T[]) {
+type TextPart = { type: string; text?: string; synthetic?: boolean; [key: string]: unknown }
+
+function phiText(text: string) {
+  return text.trim().replace(/^\/phi\s+/, "")
+}
+
+async function replacePhiParts(
+  parts: TextPart[],
+  runner: PhiRunner,
+  sessionID?: string,
+) {
   const firstTextPart = parts.find((part) => part.type === "text")
   if (!firstTextPart?.text || !isPhiText(firstTextPart.text)) return false
+  const result = await runner(phiText(firstTextPart.text), sessionID)
+  const text = result.ok ? result.scrubbed_text : failureText
   parts.splice(0, parts.length, {
     ...firstTextPart,
-    text: proofText,
+    text,
     synthetic: true,
   })
   return true
 }
 
-export const PhiPlugin: Plugin = async () => {
+function replaceCommandParts(parts: TextPart[], text: string) {
+  parts.splice(0, parts.length, {
+    type: "text",
+    text,
+    synthetic: true,
+  })
+}
+
+export function createPhiHooks(runner: PhiRunner): Hooks {
   return {
     async config(config) {
       config.command ??= {}
       config.command.phi = {
         template: "$ARGUMENTS",
-        description: "PHI proof command",
+        description: "Redact PHI locally before sending text to the model",
       }
     },
-    async "chat.message"(_input, output) {
-      replacePhiParts(output.parts)
+    async "chat.message"(input, output) {
+      await replacePhiParts(output.parts as TextPart[], runner, input.sessionID)
     },
     async "experimental.chat.messages.transform"(_input, output) {
       for (const message of output.messages) {
-        replacePhiParts(message.parts)
+        const parts = message.parts as TextPart[]
+        const firstTextPart = parts.find((part) => part.type === "text")
+        const sessionID =
+          firstTextPart && "sessionID" in firstTextPart
+            ? String(firstTextPart.sessionID)
+            : undefined
+        await replacePhiParts(parts, runner, sessionID)
       }
     },
     async "command.execute.before"(input, output) {
       if (input.command !== "phi") return
-      output.parts.length = 0
-      output.parts.push({
-        type: "text",
-        text: proofText,
-        synthetic: true,
-      } as (typeof output.parts)[number])
+      const result = await runner(input.arguments, input.sessionID)
+      replaceCommandParts(output.parts as TextPart[], result.ok ? result.scrubbed_text : failureText)
     },
   }
 }
+
+export const PhiPlugin: Plugin = async () => createPhiHooks(runPhiCli)
 
 export default PhiPlugin
