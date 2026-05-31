@@ -22,11 +22,10 @@ def _priority(finding: PhiFinding) -> tuple[int, float, int, int]:
 
 
 def _candidate_replaces_current(candidate: PhiFinding, current: PhiFinding) -> bool:
-    if candidate.entity_type != current.entity_type:
-        if _contains(candidate, current):
-            return True
-        if _contains(current, candidate):
-            return False
+    if _contains(candidate, current):
+        return True
+    if _contains(current, candidate):
+        return False
     return _priority(candidate) > _priority(current)
 
 

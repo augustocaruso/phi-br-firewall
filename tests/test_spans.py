@@ -32,9 +32,20 @@ def test_resolve_overlaps_keeps_containing_phi_span_to_avoid_partial_redaction()
     ]
 
 
-def test_resolve_overlaps_uses_score_when_specificity_matches() -> None:
+def test_resolve_overlaps_keeps_containing_same_entity_span_to_avoid_partial_redaction() -> None:
     findings = [
         finding("BR_CPF", "935.411.347-80", 4, 18, 0.70),
+        finding("BR_CPF", "411.347-80", 8, 18, 0.95),
+    ]
+
+    resolved = resolve_overlaps(findings)
+
+    assert [(item.start, item.end, item.score) for item in resolved] == [(4, 18, 0.70)]
+
+
+def test_resolve_overlaps_uses_score_when_same_entity_spans_cross() -> None:
+    findings = [
+        finding("BR_CPF", "935.411.347", 4, 15, 0.70),
         finding("BR_CPF", "411.347-80", 8, 18, 0.95),
     ]
 
