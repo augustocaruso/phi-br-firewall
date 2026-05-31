@@ -1,0 +1,91 @@
+from __future__ import annotations
+
+import re
+
+from presidio_analyzer import EntityRecognizer, RecognizerResult
+from presidio_analyzer.nlp_engine import NlpArtifacts
+
+from phi_br_core.entities import BR_ADDRESS
+
+_ADDRESS_LABEL_RE = re.compile(
+    r"(?im)^\s*(?:endere[cç]o|resid[eê]ncia|moradia|bairro)\s*:\s*(?P<address>[^\n\r]+)"
+)
+_RESIDENCE_CONTEXT_RE = re.compile(
+    r"\b(?i:residentes?|reside(?:m)?|mora(?:m)?)\s+em\s+"
+    r"(?P<address>[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][^,\n\r.;]{1,80})"
+)
+_NEXT_FIELD_RE = re.compile(
+    r"\s+\b(?:telefone|tel|celular|cep|cpf|cns|prontu[aá]rio|dn|idade|nome)\b\s*:?",
+    re.IGNORECASE,
+)
+_PLACEHOLDER_RE = re.compile(r"^\[[A-Z0-9_]+_\d{3}(?:[^\]]*)?\]$")
+
+
+class AddressBrRecognizer(EntityRecognizer):
+    def __init__(self) -> None:
+        super().__init__(
+            supported_entities=[BR_ADDRESS],
+            supported_language="pt",
+            context=[
+                "endereco",
+                "endereço",
+                "residencia",
+                "residência",
+                "moradia",
+                "bairro",
+                "residentes",
+                "residente",
+                "reside",
+                "moram",
+            ],
+        )
+
+    def load(self) -> None:
+        return None
+
+    def analyze(
+        self,
+        text: str,
+        entities: list[str],
+        nlp_artifacts: NlpArtifacts | None = None,
+    ) -> list[RecognizerResult]:
+        del nlp_artifacts
+        if BR_ADDRESS not in set(entities):
+            return []
+
+        results: list[RecognizerResult] = []
+        results.extend(self._results_for(text, _ADDRESS_LABEL_RE, 0.82))
+        results.extend(self._results_for(text, _RESIDENCE_CONTEXT_RE, 0.66))
+        return results
+
+    @staticmethod
+    def _results_for(
+        text: str, pattern: re.Pattern[str], score: float
+    ) -> list[RecognizerResult]:
+        results: list[RecognizerResult] = []
+        for match in pattern.finditer(text):
+            start, end = match.span("address")
+            end = _trim_address_end(text, start, end)
+            if end <= start:
+                continue
+            if _PLACEHOLDER_RE.fullmatch(text[start:end].strip()):
+                continue
+            results.append(
+                RecognizerResult(
+                    entity_type=BR_ADDRESS,
+                    start=start,
+                    end=end,
+                    score=score,
+                )
+            )
+        return results
+
+
+def _trim_address_end(text: str, start: int, end: int) -> int:
+    value = text[start:end]
+    if next_field := _NEXT_FIELD_RE.search(value):
+        end = start + next_field.start()
+
+    while end > start and text[end - 1] in " .,:;":
+        end -= 1
+    return end

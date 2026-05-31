@@ -15,6 +15,7 @@ from spacy.tokens import Doc
 from spacy.vocab import Vocab
 
 from phi_br_core.policy import PhiPolicy
+from phi_br_core.recognizers.address_br import AddressBrRecognizer
 from phi_br_core.recognizers.age_br import AgeBrRecognizer
 from phi_br_core.recognizers.cep import CepRecognizer
 from phi_br_core.recognizers.clinical_ids import ClinicalIdRecognizer
@@ -142,6 +143,7 @@ def build_registry(languages: list[str] | None = None) -> RecognizerRegistry:
     registry.add_recognizer(CepRecognizer())
     registry.add_recognizer(PhoneBrRecognizer())
     registry.add_recognizer(EmailBrRecognizer())
+    registry.add_recognizer(AddressBrRecognizer())
     registry.add_recognizer(ContextualIdentifierRecognizer())
     registry.add_recognizer(ClinicalIdRecognizer())
     registry.add_recognizer(DateBrRecognizer())

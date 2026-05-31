@@ -1,3 +1,4 @@
+import pytest
 from phi_br_core.analyzer import build_analyzer
 from phi_br_core.policy import PhiPolicy
 from presidio_analyzer import RecognizerResult
@@ -69,6 +70,19 @@ def test_detects_names_after_label_separators() -> None:
     assert "BR_HEALTHCARE_PROFESSIONAL_NAME" in professional_types
 
 
+def test_detects_patient_name_after_name_label() -> None:
+    text = "Nome: Laura Inacio Maranhao Goncalves\nDN: 10/06/2017."
+    findings = findings_for(text)
+
+    patient_names = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_PATIENT_NAME"
+    ]
+
+    assert patient_names == ["Laura Inacio Maranhao Goncalves"]
+
+
 def test_detects_family_member_names_by_clinical_context() -> None:
     text = "Acompanhante: Lara (mae). Mae relata piora."
     findings = findings_for(text)
@@ -92,8 +106,47 @@ def test_detects_intern_name_as_healthcare_professional() -> None:
         if result.entity_type == "BR_HEALTHCARE_PROFESSIONAL_NAME"
     ]
 
-    assert "Mateus" in professional_names
-    assert "Paula Ramos" in professional_names
+    assert "Mateus (interno eletivo)" in professional_names
+    assert "Dra Paula Ramos" in professional_names
+
+
+@pytest.mark.parametrize(
+    ("leading_context", "title"),
+    [
+        ("", "Dr"),
+        ("", "Dr."),
+        ("", "Dra"),
+        ("", "Dra."),
+        ("", "Drª"),
+        ("", "Drª."),
+        ("", "Drº"),
+        ("", "Dr(a)"),
+        ("", "Dr(a)."),
+        ("", "Doutor"),
+        ("", "Doutora"),
+        ("", "Medico"),
+        ("", "Médica"),
+        ("", "Prof. Dr."),
+        ("", "Professora Doutora"),
+        ("do ", "Dr."),
+        ("da ", "Dra."),
+        ("pelo ", "Doutor"),
+        ("pela ", "Drª."),
+    ],
+)
+def test_detects_doctor_title_as_part_of_professional_name(
+    leading_context: str, title: str
+) -> None:
+    text = f"Paciente avaliado sob orientacao {leading_context}{title} Carlos Lima."
+    findings = findings_for(text)
+
+    professional_names = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_HEALTHCARE_PROFESSIONAL_NAME"
+    ]
+
+    assert professional_names == [f"{leading_context}{title} Carlos Lima"]
 
 
 def test_name_context_stops_before_next_field_label() -> None:
@@ -165,6 +218,33 @@ def test_detects_institution_after_label_separator() -> None:
     types = entity_types_for("Encaminhada para Hospital: Santa Lucia.")
 
     assert "BR_INSTITUTION" in types
+
+
+def test_detects_address_after_address_label() -> None:
+    text = "Endereco: QC 4, Rua D, casa 8, Jardins Modelo\nTelefone (61) 99999-9999."
+    findings = findings_for(text)
+
+    addresses = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_ADDRESS"
+    ]
+
+    assert addresses == ["QC 4, Rua D, casa 8, Jardins Modelo"]
+    assert "BR_PHONE" in {result.entity_type for result in findings}
+
+
+def test_detects_residence_neighborhood_by_context() -> None:
+    text = "Residentes em Mangueiral, mae, pai e dois irmaos."
+    findings = findings_for(text)
+
+    addresses = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_ADDRESS"
+    ]
+
+    assert addresses == ["Mangueiral"]
 
 
 def test_detects_url_as_contextual_identifier() -> None:

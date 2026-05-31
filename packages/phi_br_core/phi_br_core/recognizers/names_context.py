@@ -15,6 +15,11 @@ _NAME_WORD = r"[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][A-Za-zÁÀÂÃÉÈÊÍ�
 _CONNECTOR = r"(?:da|de|do|das|dos|e)"
 _NAME = rf"{_NAME_WORD}(?:\s+(?:{_CONNECTOR}\s+)?{_NAME_WORD}){{0,4}}"
 _LABEL_SEPARATOR = r"\s*(?::|-)?\s+"
+_PROFESSIONAL_LEADING_CONTEXT = r"(?:(?:d[ao]|pel[ao]|ao|a|à)\s+)?"
+_PROFESSIONAL_TITLE_PREFIX = r"(?:(?:prof\.?|professor(?:a)?)\s+)?"
+_PROFESSIONAL_TITLE = (
+    r"(?:dr\.?|dra\.?|drª\.?|drº\.?|dr\(a\)\.?|doutor(?:a)?|m[eé]dic[oa])"
+)
 _MEDICATION_TERMS = {
     "aripiprazol",
     "buspirona",
@@ -95,6 +100,10 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
         self._patient_pattern = re.compile(
             rf"\b(?i:paciente|usu[aá]rio|cliente){_LABEL_SEPARATOR}(?P<name>{_NAME})\b",
         )
+        self._patient_name_label_pattern = re.compile(
+            rf"(?im)^\s*(?i:nome(?:\s+(?:completo|social|do\s+paciente))?)"
+            rf"\s*:\s*(?P<name>{_NAME})\b",
+        )
         self._family_label_pattern = re.compile(
             rf"\b(?i:acompanhante|respons[aá]vel|m[aã]e|pai|filh[ao]|av[oóô])"
             rf"{_LABEL_SEPARATOR}(?P<name>{_NAME})\b",
@@ -103,11 +112,12 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
             rf"\b(?P<name>{_NAME})\s*\((?i:m[aã]e|pai|filh[ao]|av[oóô])\)",
         )
         self._professional_pattern = re.compile(
-            rf"\b(?i:dr\.?|dra\.?|m[eé]dico|m[eé]dica){_LABEL_SEPARATOR}(?P<name>{_NAME})\b",
+            rf"\b(?P<name>(?i:{_PROFESSIONAL_LEADING_CONTEXT}"
+            rf"{_PROFESSIONAL_TITLE_PREFIX}{_PROFESSIONAL_TITLE}){_LABEL_SEPARATOR}{_NAME})\b",
         )
         self._professional_role_pattern = re.compile(
-            rf"\b(?P<name>{_NAME})\s*"
-            r"\((?i:intern[oa]|residente|staff|preceptor[ao]?|m[eé]dic[oa])[^)]*\)",
+            rf"\b(?P<name>{_NAME}\s*"
+            r"\((?i:intern[oa]|residente|staff|preceptor[ao]?|m[eé]dic[oa])[^)]*\))",
         )
 
     def load(self) -> None:
@@ -124,6 +134,14 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
         requested = set(entities)
         if BR_PATIENT_NAME in requested:
             results.extend(self._results_for(text, self._patient_pattern, BR_PATIENT_NAME, 0.75))
+            results.extend(
+                self._results_for(
+                    text,
+                    self._patient_name_label_pattern,
+                    BR_PATIENT_NAME,
+                    0.82,
+                )
+            )
         if BR_FAMILY_MEMBER_NAME in requested:
             results.extend(
                 self._results_for(

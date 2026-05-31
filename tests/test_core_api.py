@@ -116,3 +116,36 @@ def test_date_of_birth_context_does_not_leak_within_same_line(tmp_path) -> None:
     assert "[DATA_001: nascimento]" in scrub.scrubbed_text
     assert "[DATA_002: T0]" in scrub.scrubbed_text
     assert "[DATA_002: nascimento]" not in scrub.scrubbed_text
+
+
+def test_scrub_covers_identity_address_and_doctor_title_leaks(tmp_path) -> None:
+    policy = PhiPolicy()
+    policy.mapping.base_dir = str(tmp_path)
+    text = """
+Nome: Laura Inacio Maranhao Goncalves
+DN: 10/06/2017
+Idade: 8 anos
+Prontuario: 123456
+Acompanhantes: Bruna (mae)
+Endereco: QC 4, Rua D, casa 8, Jardins Modelo
+Residentes em Mangueiral, mae, pai e dois irmaos.
+Sob orientacao do Dr. Carlos Lima (staff)
+"""
+
+    scrub = scrub_text(text, policy)
+
+    assert scrub.ok is True
+    assert "Laura" not in scrub.scrubbed_text
+    assert "Maranhao" not in scrub.scrubbed_text
+    assert "QC 4" not in scrub.scrubbed_text
+    assert "Rua D" not in scrub.scrubbed_text
+    assert "Jardins Modelo" not in scrub.scrubbed_text
+    assert "Mangueiral" not in scrub.scrubbed_text
+    assert "Dr." not in scrub.scrubbed_text
+    assert "Carlos Lima" not in scrub.scrubbed_text
+    assert "Sob orientacao do [PROFISSIONAL_001]" not in scrub.scrubbed_text
+    assert "Sob orientacao [PROFISSIONAL_001]" in scrub.scrubbed_text
+    assert "[PACIENTE_001]" in scrub.scrubbed_text
+    assert "[ENDERECO_001]" in scrub.scrubbed_text
+    assert "[ENDERECO_002]" in scrub.scrubbed_text
+    assert "[PROFISSIONAL_001]" in scrub.scrubbed_text

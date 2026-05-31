@@ -1,3 +1,4 @@
+from phi_br_core.recognizers.address_br import AddressBrRecognizer
 from phi_br_core.recognizers.cep import CepRecognizer
 from phi_br_core.recognizers.clinical_ids import ClinicalIdRecognizer
 from phi_br_core.recognizers.cns import CnsRecognizer
@@ -10,6 +11,7 @@ from phi_br_core.recognizers.phone_br import PhoneBrRecognizer
 
 __all__ = [
     "CepRecognizer",
+    "AddressBrRecognizer",
     "ClinicalIdRecognizer",
     "ClinicalNameContextRecognizer",
     "CnsRecognizer",
