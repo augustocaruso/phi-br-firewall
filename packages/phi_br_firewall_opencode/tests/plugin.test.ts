@@ -115,6 +115,7 @@ describe("Phi OpenCode plugin", () => {
           messageID: "message-1",
           type: "text",
           text: "/phi Paciente Joao CPF 123.456.789-09",
+          metadata: "raw: Paciente Joao CPF 123.456.789-09",
         },
       ],
     }
@@ -130,9 +131,6 @@ describe("Phi OpenCode plugin", () => {
     expect(output.parts).toBe(originalParts)
     expect(output.parts).toEqual([
       {
-        id: "part-1",
-        sessionID: "session-1",
-        messageID: "message-1",
         type: "text",
         text: "Paciente [PACIENTE_001] CPF [CPF_001]",
         synthetic: true,
@@ -140,6 +138,7 @@ describe("Phi OpenCode plugin", () => {
     ])
     expect(JSON.stringify(output.parts)).not.toContain("Joao")
     expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
+    expect(JSON.stringify(output.parts)).not.toContain("raw:")
   })
 
   test("redacts slash phi messages during model transform", async () => {
@@ -165,6 +164,7 @@ describe("Phi OpenCode plugin", () => {
               messageID: "message-1",
               type: "text",
               text: "/phi Paciente Joao CPF 123.456.789-09",
+              metadata: "raw: Paciente Joao CPF 123.456.789-09",
             },
           ],
         },
@@ -177,9 +177,6 @@ describe("Phi OpenCode plugin", () => {
     expect(output.messages[0]?.parts).toBe(originalParts)
     expect(output.messages[0]?.parts).toEqual([
       {
-        id: "part-1",
-        sessionID: "session-1",
-        messageID: "message-1",
         type: "text",
         text: "Paciente [PACIENTE_001] CPF [CPF_001]",
         synthetic: true,
@@ -187,5 +184,6 @@ describe("Phi OpenCode plugin", () => {
     ])
     expect(JSON.stringify(output.messages)).not.toContain("Joao")
     expect(JSON.stringify(output.messages)).not.toContain("123.456.789-09")
+    expect(JSON.stringify(output.messages)).not.toContain("raw:")
   })
 })

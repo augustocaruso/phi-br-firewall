@@ -23,11 +23,7 @@ async function replacePhiParts(
   if (!firstTextPart?.text || !isPhiText(firstTextPart.text)) return false
   const result = await runner(phiText(firstTextPart.text), sessionID)
   const text = result.ok ? result.scrubbed_text : failureText
-  parts.splice(0, parts.length, {
-    ...firstTextPart,
-    text,
-    synthetic: true,
-  })
+  replaceCommandParts(parts, text)
   return true
 }
 
