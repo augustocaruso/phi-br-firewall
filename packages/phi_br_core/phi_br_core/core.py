@@ -5,6 +5,7 @@ from pathlib import Path
 from phi_br_core.analyzer import build_analyzer
 from phi_br_core.anonymizer import StablePlaceholderAnonymizer
 from phi_br_core.audit import audit_text
+from phi_br_core.clinical_rendering import ClinicalReplacementRenderer
 from phi_br_core.entities import ENTITY_TO_PLACEHOLDER_PREFIX
 from phi_br_core.models import (
     PhiAuditResult,
@@ -40,12 +41,12 @@ def scan_text(text: str, policy: PhiPolicy) -> PhiScanResult:
 def scrub_text(text: str, policy: PhiPolicy) -> PhiScrubResult:
     scan = scan_text(text, policy)
     if not policy.mapping.persist:
-        result = _scrub_without_persistence(text, scan.findings)
+        result = _scrub_without_persistence(text, scan.findings, policy)
         audit = audit_text(result.scrubbed_text, policy)
         return _apply_audit(result, audit)
 
     anonymizer = StablePlaceholderAnonymizer(base_dir=policy.mapping.base_dir)
-    result = anonymizer.scrub(text, scan.findings, source="core")
+    result = anonymizer.scrub(text, scan.findings, source="core", policy=policy)
     audit = audit_text(result.scrubbed_text, policy)
     return _apply_audit(result, audit)
 
@@ -77,8 +78,11 @@ def _without_residual_text(audit: PhiAuditResult) -> PhiAuditResult:
     )
 
 
-def _scrub_without_persistence(text: str, findings: list[PhiFinding]) -> PhiScrubResult:
+def _scrub_without_persistence(
+    text: str, findings: list[PhiFinding], policy: PhiPolicy
+) -> PhiScrubResult:
     accepted = resolve_overlaps(findings)
+    renderer = ClinicalReplacementRenderer(text, accepted, policy)
     counters: dict[str, int] = {}
     by_value: dict[tuple[str, str], str] = {}
     replacements: list[tuple[PhiFinding, str]] = []
@@ -92,14 +96,14 @@ def _scrub_without_persistence(text: str, findings: list[PhiFinding]) -> PhiScru
             counters[prefix] = next_count
             placeholder_key = f"{prefix}_{next_count:03d}"
             by_value[(finding.entity_type, finding.text)] = placeholder_key
-        replacements.append((finding, placeholder_key))
+        replacements.append((finding, renderer.render(placeholder_key, finding)))
 
-    for finding, placeholder_key in sorted(
+    for finding, replacement in sorted(
         replacements, key=lambda item: item[0].start, reverse=True
     ):
         scrubbed_text = (
             scrubbed_text[: finding.start]
-            + f"[{placeholder_key}]"
+            + replacement
             + scrubbed_text[finding.end :]
         )
 

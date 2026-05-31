@@ -78,8 +78,41 @@ Mateus (interno eletivo) sob orientacao de Dra Paula Ramos.
     assert "agosto/2023" not in scrub.scrubbed_text
     assert "dezembro/2024" not in scrub.scrubbed_text
     assert "ha 3 anos" in scrub.scrubbed_text
-    assert "[INSTITUICAO_" in scrub.scrubbed_text
-    assert "[FAMILIAR_" in scrub.scrubbed_text
-    assert "[PROFISSIONAL_" in scrub.scrubbed_text
-    assert "[IDADE_" in scrub.scrubbed_text
-    assert "[DATA_" in scrub.scrubbed_text
+    assert "[INSTITUICAO_001]" in scrub.scrubbed_text
+    assert "[FAMILIAR_001]" in scrub.scrubbed_text
+    assert "[PROFISSIONAL_001]" in scrub.scrubbed_text
+    assert "[IDADE_001: escolar]" in scrub.scrubbed_text
+    assert "[IDADE_002: lactente]" in scrub.scrubbed_text
+    assert "[IDADE_003: pre-escolar]" in scrub.scrubbed_text
+    assert "[DATA_001: T0]" in scrub.scrubbed_text
+    assert "[DATA_002: nascimento]" in scrub.scrubbed_text
+    assert "[DATA_003: T-14m]" in scrub.scrubbed_text
+    assert "[DATA_004: T+2m]" in scrub.scrubbed_text
+
+    restored = restore_text(scrub.scrubbed_text, scrub.mapping_path)
+
+    assert restored == text
+
+
+def test_date_of_birth_context_does_not_leak_to_following_event_date(tmp_path) -> None:
+    policy = PhiPolicy()
+    policy.mapping.base_dir = str(tmp_path)
+    text = "Data de Nascimento: 10/06/2017\nEm agosto/2023, apresentou placas."
+
+    scrub = scrub_text(text, policy)
+
+    assert "[DATA_001: nascimento]" in scrub.scrubbed_text
+    assert "[DATA_002: T0]" in scrub.scrubbed_text
+    assert "[DATA_002: nascimento]" not in scrub.scrubbed_text
+
+
+def test_date_of_birth_context_does_not_leak_within_same_line(tmp_path) -> None:
+    policy = PhiPolicy()
+    policy.mapping.base_dir = str(tmp_path)
+    text = "Data de Nascimento: 10/06/2017. Retorno em dezembro/2024."
+
+    scrub = scrub_text(text, policy)
+
+    assert "[DATA_001: nascimento]" in scrub.scrubbed_text
+    assert "[DATA_002: T0]" in scrub.scrubbed_text
+    assert "[DATA_002: nascimento]" not in scrub.scrubbed_text

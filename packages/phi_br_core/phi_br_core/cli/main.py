@@ -20,7 +20,7 @@ from phi_br_core.policy import PhiPolicy
 from phi_br_core.sessions import SessionStore
 
 app = typer.Typer(no_args_is_help=True)
-PLACEHOLDER_PATTERN = re.compile(r"\[([A-Z0-9_]+_\d{3})\]")
+PLACEHOLDER_PATTERN = re.compile(r"\[([A-Z0-9_]+_\d{3})(?:[^\]]*)?\]")
 CUSTOM_RECOGNIZERS = (
     "BR_CPF",
     "BR_CNS",

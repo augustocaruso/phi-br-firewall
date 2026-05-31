@@ -17,7 +17,7 @@ class MappingPolicy(PolicyModel):
 
 
 class DatePolicy(PolicyModel):
-    strategy: Literal["placeholder", "shift", "preserve_relative"] = "placeholder"
+    strategy: Literal["placeholder", "shift", "preserve_relative"] = "preserve_relative"
     preserve_relative_dates: bool = True
 
 

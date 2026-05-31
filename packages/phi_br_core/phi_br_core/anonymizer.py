@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
+from phi_br_core.clinical_rendering import ClinicalReplacementRenderer
 from phi_br_core.entities import ENTITY_TO_PLACEHOLDER_PREFIX
 from phi_br_core.mapping import PlaceholderIndex, write_json_atomic
 from phi_br_core.models import PhiAuditResult, PhiFinding, PhiScrubResult, PhiScrubSummary
+from phi_br_core.policy import PhiPolicy
 from phi_br_core.sessions import SessionStore
 from phi_br_core.spans import resolve_overlaps
 
@@ -18,10 +21,15 @@ class StablePlaceholderAnonymizer:
         self.sessions = SessionStore(self.base_dir, placeholder_index=self.index)
 
     def scrub(
-        self, text: str, findings: list[PhiFinding], source: str = "unknown"
+        self,
+        text: str,
+        findings: list[PhiFinding],
+        source: str = "unknown",
+        policy: PhiPolicy | None = None,
     ) -> PhiScrubResult:
         session = self.sessions.create(source=source)
         accepted = resolve_overlaps(findings)
+        renderer = ClinicalReplacementRenderer(text, accepted, policy or PhiPolicy())
         by_value: dict[tuple[str, str], str] = {}
         items: dict[str, dict[str, str]] = {}
         replacements: list[tuple[PhiFinding, str]] = []
@@ -38,14 +46,14 @@ class StablePlaceholderAnonymizer:
                     "entity_type": finding.entity_type,
                 }
                 self.index.assign(placeholder_key, session.session_id)
-            replacements.append((finding, placeholder_key))
+            replacements.append((finding, renderer.render(placeholder_key, finding)))
 
-        for finding, placeholder_key in sorted(
+        for finding, replacement in sorted(
             replacements, key=lambda item: item[0].start, reverse=True
         ):
             scrubbed_text = (
                 scrubbed_text[: finding.start]
-                + f"[{placeholder_key}]"
+                + replacement
                 + scrubbed_text[finding.end :]
             )
 
@@ -76,7 +84,11 @@ class StablePlaceholderAnonymizer:
         for placeholder_key, item in sorted(
             mapping.items(), key=lambda entry: len(entry[0]), reverse=True
         ):
-            restored = restored.replace(f"[{placeholder_key}]", item["value"])
+            restored = re.sub(
+                rf"\[{re.escape(placeholder_key)}(?:[^\]]*)?\]",
+                item["value"],
+                restored,
+            )
         return restored
 
     @staticmethod

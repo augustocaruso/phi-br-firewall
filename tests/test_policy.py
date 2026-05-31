@@ -21,6 +21,8 @@ def test_policy_defaults_are_safe() -> None:
     assert policy.min_score == 0.45
     assert policy.audit_threshold == 0.35
     assert policy.mapping.base_dir == ".tmp/phi"
+    assert policy.dates.strategy == "preserve_relative"
+    assert policy.ages.strategy == "age_band"
     assert policy.sessions.ttl_hours == 24
     assert policy.sessions.purge_expired_on_start is True
 
