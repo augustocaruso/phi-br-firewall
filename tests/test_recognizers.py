@@ -71,7 +71,7 @@ def test_detects_names_after_label_separators() -> None:
 
 
 def test_detects_patient_name_after_name_label() -> None:
-    text = "Nome: Laura Inacio Maranhao Goncalves\nDN: 10/06/2017."
+    text = "Nome: Ana Silva Costa\nDN: 10/06/2017."
     findings = findings_for(text)
 
     patient_names = [
@@ -80,7 +80,7 @@ def test_detects_patient_name_after_name_label() -> None:
         if result.entity_type == "BR_PATIENT_NAME"
     ]
 
-    assert patient_names == ["Laura Inacio Maranhao Goncalves"]
+    assert patient_names == ["Ana Silva Costa"]
 
 
 def test_detects_family_member_names_by_clinical_context() -> None:
@@ -202,7 +202,7 @@ def test_institution_context_stops_before_next_field_label() -> None:
 
 
 def test_detects_healthcare_institution_acronym_without_section_acronyms() -> None:
-    text = "AMBULATORIO DERMATOPEDIATRIA HUB. QP dermatite. HDA sem febre. BEG."
+    text = "AMBULATORIO DERMATOLOGIA HCB. QP dermatite. HDA sem febre. BEG."
     findings = findings_for(text)
 
     institutions = [
@@ -211,7 +211,7 @@ def test_detects_healthcare_institution_acronym_without_section_acronyms() -> No
         if result.entity_type == "BR_INSTITUTION"
     ]
 
-    assert institutions == ["HUB"]
+    assert institutions == ["HCB"]
 
 
 def test_detects_institution_after_label_separator() -> None:
@@ -221,7 +221,7 @@ def test_detects_institution_after_label_separator() -> None:
 
 
 def test_detects_address_after_address_label() -> None:
-    text = "Endereco: QC 4, Rua D, casa 8, Jardins Modelo\nTelefone (61) 99999-9999."
+    text = "Endereco: Quadra 10, Rua A, casa 1, Bairro Modelo\nTelefone (61) 99999-9999."
     findings = findings_for(text)
 
     addresses = [
@@ -230,12 +230,12 @@ def test_detects_address_after_address_label() -> None:
         if result.entity_type == "BR_ADDRESS"
     ]
 
-    assert addresses == ["QC 4, Rua D, casa 8, Jardins Modelo"]
+    assert addresses == ["Quadra 10, Rua A, casa 1, Bairro Modelo"]
     assert "BR_PHONE" in {result.entity_type for result in findings}
 
 
 def test_detects_residence_neighborhood_by_context() -> None:
-    text = "Residentes em Mangueiral, mae, pai e dois irmaos."
+    text = "Residentes em Vila Modelo, mae, pai e dois irmaos."
     findings = findings_for(text)
 
     addresses = [
@@ -244,7 +244,7 @@ def test_detects_residence_neighborhood_by_context() -> None:
         if result.entity_type == "BR_ADDRESS"
     ]
 
-    assert addresses == ["Mangueiral"]
+    assert addresses == ["Vila Modelo"]
 
 
 def test_detects_url_as_contextual_identifier() -> None:

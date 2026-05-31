@@ -48,30 +48,33 @@ def test_scrub_respects_non_persistent_mapping_policy(tmp_path) -> None:
     assert list(tmp_path.rglob("*")) == []
 
 
-def test_scrub_covers_dermatopediatrics_note_leak_patterns(tmp_path) -> None:
+def test_scrub_covers_clinical_note_leak_patterns(tmp_path) -> None:
     policy = PhiPolicy()
     policy.mapping.base_dir = str(tmp_path)
     text = """
-AMBULATORIO DERMATOPEDIATRIA HUB - 20/10/2024
+AMBULATORIO DERMATOLOGIA
+Hospital Santa Luzia
+Data do atendimento: 20/10/2024
 Paciente: Crianca Teste: 7 anos e 4 meses
 Data de Nascimento: 10/06/2017
 Prontuario: 123456
-Acompanhante: Lara (mae)
+Acompanhante: Aline (mae)
 QP: dermatite ha 3 anos
 Quando tinha apenas 1 mes de idade, apresentou lesao.
 Aos 4 anos de idade, surgiram lesoes.
 Em agosto/2023, apresentou placas.
 Retorno em dezembro/2024.
-Mateus (interno eletivo) sob orientacao de Dra Paula Ramos.
+Bruno (interno eletivo) sob orientacao de Dra Renata Alves.
 """
 
     scrub = scrub_text(text, policy)
 
     assert scrub.ok is True
-    assert "HUB" not in scrub.scrubbed_text
-    assert "Lara" not in scrub.scrubbed_text
-    assert "Mateus" not in scrub.scrubbed_text
-    assert "Paula Ramos" not in scrub.scrubbed_text
+    assert "Hospital Santa Luzia" not in scrub.scrubbed_text
+    assert "20/10/2024" not in scrub.scrubbed_text
+    assert "Aline" not in scrub.scrubbed_text
+    assert "Bruno" not in scrub.scrubbed_text
+    assert "Renata Alves" not in scrub.scrubbed_text
     assert "7 anos e 4 meses" not in scrub.scrubbed_text
     assert "1 mes de idade" not in scrub.scrubbed_text
     assert "4 anos de idade" not in scrub.scrubbed_text
@@ -122,25 +125,24 @@ def test_scrub_covers_identity_address_and_doctor_title_leaks(tmp_path) -> None:
     policy = PhiPolicy()
     policy.mapping.base_dir = str(tmp_path)
     text = """
-Nome: Laura Inacio Maranhao Goncalves
+Nome: Ana Silva Costa
 DN: 10/06/2017
 Idade: 8 anos
 Prontuario: 123456
 Acompanhantes: Bruna (mae)
-Endereco: QC 4, Rua D, casa 8, Jardins Modelo
-Residentes em Mangueiral, mae, pai e dois irmaos.
+Endereco: Quadra 10, Rua A, casa 1, Bairro Modelo
+Residentes em Vila Modelo, mae, pai e dois irmaos.
 Sob orientacao do Dr. Carlos Lima (staff)
 """
 
     scrub = scrub_text(text, policy)
 
     assert scrub.ok is True
-    assert "Laura" not in scrub.scrubbed_text
-    assert "Maranhao" not in scrub.scrubbed_text
-    assert "QC 4" not in scrub.scrubbed_text
-    assert "Rua D" not in scrub.scrubbed_text
-    assert "Jardins Modelo" not in scrub.scrubbed_text
-    assert "Mangueiral" not in scrub.scrubbed_text
+    assert "Ana Silva Costa" not in scrub.scrubbed_text
+    assert "Quadra 10" not in scrub.scrubbed_text
+    assert "Rua A" not in scrub.scrubbed_text
+    assert "Bairro Modelo" not in scrub.scrubbed_text
+    assert "Vila Modelo" not in scrub.scrubbed_text
     assert "Dr." not in scrub.scrubbed_text
     assert "Carlos Lima" not in scrub.scrubbed_text
     assert "Sob orientacao do [PROFISSIONAL_001]" not in scrub.scrubbed_text
