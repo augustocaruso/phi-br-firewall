@@ -15,7 +15,10 @@ _AGE_PATTERN = re.compile(
     r")\b",
     flags=re.IGNORECASE,
 )
-_DURATION_PREFIX_PATTERN = re.compile(r"(?:^|\W)(?:h[áa]|faz|desde)\s+$", flags=re.IGNORECASE)
+_DURATION_PREFIX_PATTERN = re.compile(
+    r"(?:^|\W)(?:h[áa]|faz|desde|para|por|durante|em|ap[oó]s)\s+$",
+    flags=re.IGNORECASE,
+)
 
 
 class AgeBrRecognizer(EntityRecognizer):
@@ -41,7 +44,7 @@ class AgeBrRecognizer(EntityRecognizer):
 
         results: list[RecognizerResult] = []
         for match in _AGE_PATTERN.finditer(text):
-            if self._looks_like_duration(text, match.start("age")):
+            if self._looks_like_duration(text, match.start("age"), match.end("age")):
                 continue
             results.append(
                 RecognizerResult(
@@ -54,6 +57,9 @@ class AgeBrRecognizer(EntityRecognizer):
         return results
 
     @staticmethod
-    def _looks_like_duration(text: str, start: int) -> bool:
+    def _looks_like_duration(text: str, start: int, end: int) -> bool:
+        value = text[start:end]
+        if re.search(r"\bde\s+idade\b", value, flags=re.IGNORECASE):
+            return False
         prefix = text[max(0, start - 16) : start]
         return bool(_DURATION_PREFIX_PATTERN.search(prefix))

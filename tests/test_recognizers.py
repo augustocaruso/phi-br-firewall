@@ -281,6 +281,22 @@ def test_detects_pediatric_ages_without_symptom_duration() -> None:
     assert "3 anos" not in ages
 
 
+def test_does_not_detect_prescription_or_followup_duration_as_age() -> None:
+    text = (
+        "Mantenho medicacoes em uso - deixo receitas para 4 meses. "
+        "Retorno em 4 meses. Usar pomada por 2 meses."
+    )
+    findings = findings_for(text)
+
+    ages = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_AGE"
+    ]
+
+    assert ages == []
+
+
 def test_detects_brazilian_text_month_dates() -> None:
     text = "Em agosto/2023 houve piora. Retorno em dezembro/2024."
     findings = findings_for(text)

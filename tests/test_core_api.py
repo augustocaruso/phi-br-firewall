@@ -151,3 +151,15 @@ Sob orientacao do Dr. Carlos Lima (staff)
     assert "[ENDERECO_001]" in scrub.scrubbed_text
     assert "[ENDERECO_002]" in scrub.scrubbed_text
     assert "[PROFISSIONAL_001]" in scrub.scrubbed_text
+
+
+def test_scrub_preserves_prescription_duration(tmp_path) -> None:
+    policy = PhiPolicy()
+    policy.mapping.base_dir = str(tmp_path)
+    text = "Mantenho medicacoes em uso - deixo receitas para 4 meses."
+
+    scrub = scrub_text(text, policy)
+
+    assert scrub.ok is True
+    assert scrub.scrubbed_text == text
+    assert "IDADE" not in scrub.scrubbed_text
