@@ -41,3 +41,23 @@ class PhiScrubResult(BaseModel):
     session_id: str
     audit: PhiAuditResult
     summary: PhiScrubSummary
+
+
+class PhiRedactResult(BaseModel):
+    ok: bool
+    action: str = "redact"
+    redacted_text: str = ""
+    session_id: str = ""
+    summary: PhiScrubSummary = Field(
+        default_factory=lambda: PhiScrubSummary(entities_replaced=0, entity_types=[])
+    )
+    reason: str = ""
+
+
+class PhiRestoreResult(BaseModel):
+    ok: bool
+    action: str = "restore"
+    restored_text: str = ""
+    contains_phi: bool = False
+    sessions_used: list[str] = Field(default_factory=list)
+    reason: str = ""

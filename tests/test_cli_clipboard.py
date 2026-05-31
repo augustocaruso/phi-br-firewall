@@ -259,3 +259,66 @@ def test_scrub_stdin_outputs_safe_json_without_printing_phi(
     assert payload["summary"]["entities_replaced"] == 2
     assert "Joao da Silva" not in result.stdout
     assert "935.411.347-80" not in result.stdout
+
+
+def test_api_redact_and_restore_use_stdin_stdout_without_clipboard(
+    monkeypatch, tmp_path: Path
+) -> None:
+    raw_text = "Paciente Joao da Silva, CPF 935.411.347-80."
+
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "phi_br_core.clipboard.read_clipboard",
+        lambda: pytest.fail("clipboard read should not happen"),
+    )
+    monkeypatch.setattr(
+        "phi_br_core.clipboard.write_clipboard",
+        lambda value: pytest.fail(f"clipboard write should not happen: {value}"),
+    )
+
+    redact = runner.invoke(app, ["api", "redact", "--json"], input=raw_text)
+
+    assert redact.exit_code == 0
+    redact_payload = json.loads(redact.stdout)
+    assert redact_payload["ok"] is True
+    assert redact_payload["action"] == "redact"
+    assert "[PACIENTE_001]" in redact_payload["redacted_text"]
+    assert "[CPF_001]" in redact_payload["redacted_text"]
+    assert redact_payload["session_id"]
+    assert redact_payload["summary"]["entities_replaced"] == 2
+    assert "Joao da Silva" not in redact.stdout
+    assert "935.411.347-80" not in redact.stdout
+
+    restore = runner.invoke(
+        app,
+        ["api", "restore", "--json"],
+        input=redact_payload["redacted_text"],
+    )
+
+    assert restore.exit_code == 0
+    restore_payload = json.loads(restore.stdout)
+    assert restore_payload == {
+        "ok": True,
+        "action": "restore",
+        "restored_text": raw_text,
+        "contains_phi": True,
+        "sessions_used": [redact_payload["session_id"]],
+    }
+
+
+def test_api_restore_failure_does_not_print_placeholders(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+
+    result = runner.invoke(app, ["api", "restore", "--json"], input="Paciente [PACIENTE_001].")
+
+    assert result.exit_code != 0
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "ok": False,
+        "action": "restore_failed",
+        "reason": "placeholder_owner_missing",
+        "contains_phi": False,
+    }
+    assert "PACIENTE_001" not in result.stdout

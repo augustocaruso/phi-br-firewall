@@ -41,8 +41,12 @@ raw="$(cat)"
 case "$*" in
   *Joao*|*935.411.347-80*) echo '{"ok":false,"reason":"raw_in_args"}'; exit 0 ;;
 esac
+if [ "$*" != "api redact --json" ]; then
+  echo '{"ok":false,"reason":"wrong_args"}'
+  exit 0
+fi
 if [ "$raw" = "Paciente Joao CPF 935.411.347-80" ]; then
-  echo '{"ok":true,"scrubbed_text":"Paciente [PACIENTE_001] CPF [CPF_001]","session_id":"phi-test","summary":{"entities_replaced":2,"entity_types":["BR_PATIENT_NAME","BR_CPF"]}}'
+  echo '{"ok":true,"action":"redact","redacted_text":"Paciente [PACIENTE_001] CPF [CPF_001]","session_id":"phi-test","summary":{"entities_replaced":2,"entity_types":["BR_PATIENT_NAME","BR_CPF"]}}'
 else
   echo '{"ok":false,"reason":"stdin_missing"}'
 fi

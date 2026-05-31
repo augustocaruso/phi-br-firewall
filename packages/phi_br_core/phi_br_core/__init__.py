@@ -1,4 +1,5 @@
 from phi_br_core.analyzer import build_analyzer, build_registry
+from phi_br_core.api import redact_text, restore_active_text
 from phi_br_core.audit import audit_text
 from phi_br_core.core import restore_text, scan_text, scrub_text
 from phi_br_core.entities import (
@@ -10,6 +11,8 @@ from phi_br_core.entities import (
 from phi_br_core.models import (
     PhiAuditResult,
     PhiFinding,
+    PhiRedactResult,
+    PhiRestoreResult,
     PhiScanResult,
     PhiScrubResult,
     PhiScrubSummary,
@@ -36,11 +39,15 @@ __all__ = [
     "PhiAuditResult",
     "PhiFinding",
     "PhiPolicy",
+    "PhiRedactResult",
+    "PhiRestoreResult",
     "PhiScanResult",
     "PhiScrubResult",
     "PhiScrubSummary",
     "SessionPolicy",
+    "redact_text",
     "restore_text",
+    "restore_active_text",
     "scan_text",
     "scrub_text",
 ]

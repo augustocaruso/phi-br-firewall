@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib
 import json
 import os
-import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -12,7 +11,7 @@ import typer
 
 from phi_br_core import clipboard
 from phi_br_core.analyzer import build_analyzer, build_registry
-from phi_br_core.anonymizer import StablePlaceholderAnonymizer
+from phi_br_core.api import redact_text, restore_active_text
 from phi_br_core.audit import audit_text
 from phi_br_core.core import scrub_text
 from phi_br_core.mapping import PlaceholderIndex
@@ -20,7 +19,8 @@ from phi_br_core.policy import PhiPolicy
 from phi_br_core.sessions import SessionStore
 
 app = typer.Typer(no_args_is_help=True)
-PLACEHOLDER_PATTERN = re.compile(r"\[([A-Z0-9_]+_\d{3})(?:[^\]]*)?\]")
+api_app = typer.Typer(no_args_is_help=True)
+app.add_typer(api_app, name="api", help="Programmatic stdin/stdout API.")
 CUSTOM_RECOGNIZERS = (
     "BR_CPF",
     "BR_CNS",
@@ -41,12 +41,6 @@ CUSTOM_RECOGNIZERS = (
     "BR_FAMILY_MEMBER_NAME",
     "BR_HEALTHCARE_PROFESSIONAL_NAME",
 )
-
-
-class RestoreError(Exception):
-    def __init__(self, reason: str) -> None:
-        super().__init__(reason)
-        self.reason = reason
 
 
 @app.callback()
@@ -160,25 +154,103 @@ def scrub_stdin(
     )
 
 
+@api_app.command("redact")
+def api_redact(
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON output."),
+) -> None:
+    """Redact stdin text and print safe JSON without using the clipboard."""
+    if not json_output:
+        _echo_json({"ok": False, "action": "redact_failed", "reason": "json_required"})
+        raise typer.Exit(code=1)
+
+    try:
+        result = redact_text(sys.stdin.read(), _policy())
+    except Exception as error:
+        _echo_json({"ok": False, "action": "redact_failed", "reason": "redact_failed"})
+        raise typer.Exit(code=1) from error
+
+    if not result.ok:
+        _echo_json(
+            {
+                "ok": False,
+                "action": "redact_failed",
+                "reason": result.reason or "redact_failed",
+            }
+        )
+        raise typer.Exit(code=1)
+
+    _echo_json(
+        {
+            "ok": True,
+            "action": result.action,
+            "redacted_text": result.redacted_text,
+            "session_id": result.session_id,
+            "summary": result.summary.model_dump(),
+        }
+    )
+
+
+@api_app.command("restore")
+def api_restore(
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON output."),
+) -> None:
+    """Restore stdin placeholders and print JSON. Successful output contains PHI."""
+    if not json_output:
+        _echo_json({"ok": False, "action": "restore_failed", "reason": "json_required"})
+        raise typer.Exit(code=1)
+
+    try:
+        result = restore_active_text(sys.stdin.read(), _policy())
+    except Exception as error:
+        _echo_json(
+            {
+                "ok": False,
+                "action": "restore_failed",
+                "reason": "restore_failed",
+                "contains_phi": False,
+            }
+        )
+        raise typer.Exit(code=1) from error
+
+    if not result.ok:
+        _echo_json(
+            {
+                "ok": False,
+                "action": "restore_failed",
+                "reason": result.reason or "restore_failed",
+                "contains_phi": False,
+            }
+        )
+        raise typer.Exit(code=1)
+
+    _echo_json(
+        {
+            "ok": True,
+            "action": result.action,
+            "restored_text": result.restored_text,
+            "contains_phi": result.contains_phi,
+            "sessions_used": result.sessions_used,
+        }
+    )
+
+
 @app.command()
 def restore() -> None:
     """Restore clipboard placeholders locally without printing restored text."""
     policy = _policy()
-    _purge_expired(policy)
     redacted_text = clipboard.read_clipboard()
-    try:
-        restored_text = _restore_from_active_index(redacted_text, Path(policy.mapping.base_dir))
-    except RestoreError as error:
+    result = restore_active_text(redacted_text, policy)
+    if not result.ok:
         _echo_json(
             {
                 "ok": False,
                 "action": "clipboard_restore_failed",
                 "printed_phi": False,
-                "reason": error.reason,
+                "reason": result.reason or "restore_failed",
             }
         )
-        raise typer.Exit(code=1) from error
-    clipboard.write_clipboard(restored_text)
+        raise typer.Exit(code=1)
+    clipboard.write_clipboard(result.restored_text)
     _echo_json({"ok": True, "action": "clipboard_restored", "printed_phi": False})
 
 
@@ -226,30 +298,6 @@ def _purge_all(policy: PhiPolicy) -> list[str]:
     base_dir = Path(policy.mapping.base_dir)
     index = PlaceholderIndex(base_dir / "index.json")
     return SessionStore(base_dir, placeholder_index=index).purge_all()
-
-
-def _restore_from_active_index(text: str, base_dir: Path) -> str:
-    placeholder_keys = sorted(set(PLACEHOLDER_PATTERN.findall(text)))
-    if not placeholder_keys:
-        return text
-
-    try:
-        resolved = PlaceholderIndex(base_dir / "index.json").resolve(placeholder_keys)
-    except ValueError as error:
-        raise RestoreError("placeholder_owner_ambiguous") from error
-    if set(resolved) != set(placeholder_keys):
-        raise RestoreError("placeholder_owner_missing")
-
-    anonymizer = StablePlaceholderAnonymizer(base_dir=base_dir)
-    restored = text
-    for session_id in sorted(set(resolved.values())):
-        mapping_path = base_dir / session_id / "mapping.json"
-        if not mapping_path.exists():
-            raise RestoreError("mapping_missing")
-        restored = anonymizer.restore(restored, mapping_path)
-    if PLACEHOLDER_PATTERN.search(restored):
-        raise RestoreError("restore_incomplete")
-    return restored
 
 
 def _session_ids(base_dir: Path) -> list[str]:

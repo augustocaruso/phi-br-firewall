@@ -70,6 +70,58 @@ phi purge --all
 
 Every public command runs expired-session cleanup first.
 
+## Programmatic API
+
+Use `phi api` when another program or agent needs stdin/stdout behavior without
+touching the clipboard:
+
+```bash
+printf '%s' 'Paciente Joao da Silva, CPF 935.411.347-80.' | phi api redact --json
+```
+
+The response contains redacted text only:
+
+```json
+{
+  "ok": true,
+  "action": "redact",
+  "redacted_text": "Paciente [PACIENTE_001], CPF [CPF_001].",
+  "session_id": "phi-...",
+  "summary": {
+    "entities_replaced": 2,
+    "entity_types": ["BR_CPF", "BR_PATIENT_NAME"]
+  }
+}
+```
+
+To restore placeholders through stdout:
+
+```bash
+printf '%s' 'Paciente [PACIENTE_001], CPF [CPF_001].' | phi api restore --json
+```
+
+Successful restore output contains PHI by definition and is marked explicitly:
+
+```json
+{
+  "ok": true,
+  "action": "restore",
+  "restored_text": "Paciente Joao da Silva, CPF 935.411.347-80.",
+  "contains_phi": true,
+  "sessions_used": ["phi-..."]
+}
+```
+
+Python callers can use the same non-clipboard contract:
+
+```python
+from phi_br_core import PhiPolicy, redact_text, restore_active_text
+
+policy = PhiPolicy()
+redacted = redact_text(raw_text, policy)
+restored = restore_active_text(redacted.redacted_text, policy)
+```
+
 ## Sessions and mappings
 
 Runtime mappings live under:
@@ -105,7 +157,7 @@ Then use:
 /phi <texto livre com prontuario>
 ```
 
-The plugin calls the local `phi` CLI through stdin and mutates the OpenCode
+The plugin calls `phi api redact --json` through stdin and mutates the OpenCode
 message parts in place. On success, only the redacted text is sent onward. On
 failure, the model-facing text becomes:
 

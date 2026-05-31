@@ -27,6 +27,7 @@ const DEFAULT_TIMEOUT_MS = 15_000
 
 type CliPayload = {
   ok?: unknown
+  redacted_text?: unknown
   scrubbed_text?: unknown
   session_id?: unknown
   summary?: unknown
@@ -38,7 +39,7 @@ export function createPhiRunner(options: PhiRunnerOptions = {}): PhiRunner {
     const searchStart = options.searchStart ?? process.cwd()
     const result = await runProcess(
       resolvePhiCommand(searchStart, options.command),
-      ["scrub-stdin", "--json"],
+      ["api", "redact", "--json"],
       text,
       {
         cwd: searchStart,
@@ -61,7 +62,11 @@ export function createPhiRunner(options: PhiRunnerOptions = {}): PhiRunner {
       }
     }
 
-    if (typeof payload.scrubbed_text !== "string" || payload.scrubbed_text.length === 0) {
+    const redactedText =
+      typeof payload.redacted_text === "string"
+        ? payload.redacted_text
+        : payload.scrubbed_text
+    if (typeof redactedText !== "string" || redactedText.length === 0) {
       return { ok: false, reason: "missing_scrubbed_text" }
     }
     if (typeof payload.session_id !== "string") {
@@ -73,7 +78,7 @@ export function createPhiRunner(options: PhiRunnerOptions = {}): PhiRunner {
 
     return {
       ok: true,
-      scrubbed_text: payload.scrubbed_text,
+      scrubbed_text: redactedText,
       session_id: payload.session_id,
       summary: payload.summary,
     }
