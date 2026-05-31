@@ -54,20 +54,43 @@ class SessionStore:
     def purge_expired(self, now: datetime | None = None) -> list[str]:
         current_time = self._normalize_datetime(now)
         purged: list[str] = []
+        index_session_ids: list[str] = []
         if not self.base_dir.exists():
             return purged
 
+        for record in self.list_records():
+            if record.expires_at > current_time:
+                continue
+            self._delete_session_dir(record.path)
+            purged.append(record.session_id)
+            index_session_ids.extend(self._index_session_ids(record))
+        if self.placeholder_index is not None:
+            self.placeholder_index.remove_sessions(index_session_ids)
+        return purged
+
+    def purge_all(self) -> list[str]:
+        purged: list[str] = []
+        index_session_ids: list[str] = []
+        for record in self.list_records():
+            self._delete_session_dir(record.path)
+            purged.append(record.session_id)
+            index_session_ids.extend(self._index_session_ids(record))
+        if self.placeholder_index is not None:
+            self.placeholder_index.remove_sessions(index_session_ids)
+        return purged
+
+    def list_records(self) -> list[SessionRecord]:
+        if not self.base_dir.exists():
+            return []
+
+        records: list[SessionRecord] = []
         for path in self.base_dir.iterdir():
             if not path.is_dir():
                 continue
             record = self._read_record(path)
-            if record is None or record.expires_at > current_time:
-                continue
-            self._delete_session_dir(path)
-            purged.append(record.session_id)
-        if self.placeholder_index is not None:
-            self.placeholder_index.remove_sessions(purged)
-        return purged
+            if record is not None:
+                records.append(record)
+        return records
 
     def _read_record(self, path: Path) -> SessionRecord | None:
         metadata_path = path / "metadata.json"
@@ -123,3 +146,10 @@ class SessionStore:
     @staticmethod
     def _sanitize_source(source: str) -> str:
         return source if source in SAFE_SESSION_SOURCES else "unknown"
+
+    @staticmethod
+    def _index_session_ids(record: SessionRecord) -> list[str]:
+        session_ids = [record.session_id]
+        if record.path.name != record.session_id:
+            session_ids.append(record.path.name)
+        return session_ids

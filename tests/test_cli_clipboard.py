@@ -4,8 +4,10 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 from phi_br_core.cli.main import app
 from phi_br_core.mapping import PlaceholderIndex
+from phi_br_core.models import PhiAuditResult, PhiScrubResult, PhiScrubSummary
 from typer.testing import CliRunner
 
 runner = CliRunner()
@@ -96,8 +98,24 @@ def test_status_prints_counts_without_phi(monkeypatch, tmp_path: Path) -> None:
     assert payload["ok"] is True
     assert payload["active_sessions"] == 1
     assert payload["placeholder_keys"] == 2
+    assert "base_dir" not in payload
     assert "935.411.347-80" not in result.stdout
     assert "Joao da Silva" not in result.stdout
+
+
+def test_check_reports_health_without_persisting_mapping(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+
+    result = runner.invoke(app, ["check"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert payload["presidio_analyzer"] is True
+    assert "BR_CPF" in payload["custom_recognizers"]
+    assert list(tmp_path.rglob("mapping.json")) == []
+    assert list(tmp_path.rglob("metadata.json")) == []
+    assert not (tmp_path / "index.json").exists()
 
 
 def test_purge_deletes_expired_sessions_and_cleans_index(
@@ -151,3 +169,73 @@ def test_purge_all_deletes_active_sessions(monkeypatch, tmp_path: Path) -> None:
     assert payload["purged_sessions"] == 1
     assert [path for path in tmp_path.iterdir() if path.is_dir()] == []
     assert PlaceholderIndex(tmp_path / "index.json").resolve(["PACIENTE_001", "CPF_001"]) == {}
+
+
+def test_restore_fails_closed_when_placeholder_owner_is_missing(
+    monkeypatch, tmp_path: Path
+) -> None:
+    clipboard = {"text": "Paciente [PACIENTE_001], CPF [CPF_001]."}
+
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+    monkeypatch.setattr("phi_br_core.clipboard.read_clipboard", lambda: clipboard["text"])
+    monkeypatch.setattr(
+        "phi_br_core.clipboard.write_clipboard",
+        lambda value: clipboard.update(text=value),
+    )
+
+    result = runner.invoke(app, ["restore"])
+
+    assert result.exit_code != 0
+    assert clipboard["text"] == "Paciente [PACIENTE_001], CPF [CPF_001]."
+    assert "PACIENTE_001" not in result.stdout
+    assert "CPF_001" not in result.stdout
+
+
+def test_restore_fails_closed_when_mapping_file_is_missing(
+    monkeypatch, tmp_path: Path
+) -> None:
+    clipboard = {"text": "Paciente [PACIENTE_001]."}
+    PlaceholderIndex(tmp_path / "index.json").assign("PACIENTE_001", "phi-missing")
+
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+    monkeypatch.setattr("phi_br_core.clipboard.read_clipboard", lambda: clipboard["text"])
+    monkeypatch.setattr(
+        "phi_br_core.clipboard.write_clipboard",
+        lambda value: clipboard.update(text=value),
+    )
+
+    result = runner.invoke(app, ["restore"])
+
+    assert result.exit_code != 0
+    assert clipboard["text"] == "Paciente [PACIENTE_001]."
+    assert "PACIENTE_001" not in result.stdout
+
+
+def test_redact_does_not_write_clipboard_when_scrub_fails(
+    monkeypatch, tmp_path: Path
+) -> None:
+    clipboard = {"text": "Paciente Joao da Silva."}
+
+    def unsafe_scrub(*_args: object, **_kwargs: object) -> PhiScrubResult:
+        return PhiScrubResult(
+            ok=False,
+            action="scrub",
+            scrubbed_text="Paciente Joao da Silva.",
+            mapping_path="",
+            session_id="",
+            audit=PhiAuditResult(safe=False, residual_findings=[]),
+            summary=PhiScrubSummary(entities_replaced=0, entity_types=[]),
+        )
+
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+    monkeypatch.setattr("phi_br_core.clipboard.read_clipboard", lambda: clipboard["text"])
+    monkeypatch.setattr(
+        "phi_br_core.clipboard.write_clipboard",
+        lambda value: pytest.fail(f"clipboard write should not happen: {value}"),
+    )
+    monkeypatch.setattr("phi_br_core.cli.main.scrub_text", unsafe_scrub)
+
+    result = runner.invoke(app, ["redact"])
+
+    assert result.exit_code != 0
+    assert clipboard["text"] == "Paciente Joao da Silva."
