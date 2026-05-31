@@ -1,7 +1,12 @@
-import type { Hooks } from "@opencode-ai/plugin"
+import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import type { PhiRunner } from "./phi.js"
 
 const failurePlaceholder = "[PHI_REDACTION_FAILED]"
+
+type OpenCodeClient = PluginInput["client"]
+type HookOptions = {
+  client?: OpenCodeClient
+}
 
 function isPhiText(text: string) {
   return text.trim().startsWith("/phi ")
@@ -21,7 +26,10 @@ async function replacePhiParts(
   const firstTextPart = parts.find((part) => part.type === "text")
   if (!firstTextPart?.text || !isPhiText(firstTextPart.text)) return false
   const result = await runner(phiText(firstTextPart.text), sessionID)
-  if (!result.ok) failClosed(parts, result.reason)
+  if (!result.ok) {
+    replaceCommandParts(parts, failureMessage(result.reason))
+    return true
+  }
   replaceCommandParts(parts, result.scrubbed_text)
   return true
 }
@@ -34,12 +42,37 @@ function replaceCommandParts(parts: TextPart[], text: string) {
   })
 }
 
-function failClosed(parts: TextPart[], reason: string): never {
-  replaceCommandParts(parts, failurePlaceholder)
-  throw new Error(`PHI_REDACTION_FAILED: raw prompt blocked before model dispatch (${reason})`)
+function failureMessage(reason: string) {
+  const safeReason = reason.replace(/[^A-Za-z0-9_.:-]/g, "_").slice(0, 80) || "unknown"
+  return `${failurePlaceholder}\nResponda ao usuario exatamente: "Phi bloqueou esta mensagem antes do modelo. Motivo: ${safeReason}."`
 }
 
-export function createPhiHooks(runner: PhiRunner): Hooks {
+async function printVisibleRedactedInput(
+  client: OpenCodeClient | undefined,
+  sessionID: string | undefined,
+  text: string,
+) {
+  if (!client || !sessionID) return
+  try {
+    await client.session.prompt({
+      path: { id: sessionID },
+      body: {
+        noReply: true,
+        parts: [
+          {
+            type: "text",
+            text,
+            ignored: true,
+          },
+        ],
+      },
+    })
+  } catch {
+    // The redacted model payload below is still the enforcement path.
+  }
+}
+
+export function createPhiHooks(runner: PhiRunner, options: HookOptions = {}): Hooks {
   return {
     async config(config) {
       config.command ??= {}
@@ -65,8 +98,12 @@ export function createPhiHooks(runner: PhiRunner): Hooks {
     async "command.execute.before"(input, output) {
       if (input.command !== "phi") return
       const result = await runner(input.arguments, input.sessionID)
-      if (!result.ok) failClosed(output.parts as TextPart[], result.reason)
+      if (!result.ok) {
+        replaceCommandParts(output.parts as TextPart[], failureMessage(result.reason))
+        return
+      }
       replaceCommandParts(output.parts as TextPart[], result.scrubbed_text)
+      await printVisibleRedactedInput(options.client, input.sessionID, result.scrubbed_text)
     },
   }
 }

@@ -79,6 +79,43 @@ fi
     expect(JSON.stringify(result)).not.toContain("935.411.347-80")
   })
 
+  test("falls back to a known global phi path when no project-local executable exists", async () => {
+    delete process.env.PHI_CLI_COMMAND
+    const root = await mkdtemp(join(tmpdir(), "phi-runner-global-"))
+    const projectDir = join(root, "project")
+    const globalDir = join(root, "global-bin")
+    await mkdir(projectDir, { recursive: true })
+    await mkdir(globalDir, { recursive: true })
+    const globalPhi = join(globalDir, "phi")
+    await writeFile(
+      globalPhi,
+      `#!/bin/sh
+raw="$(cat)"
+if [ "$raw" = "Paciente Joao CPF 935.411.347-80" ]; then
+  echo '{"ok":true,"action":"redact","redacted_text":"Paciente [PACIENTE_001] CPF [CPF_001]","session_id":"phi-global","summary":{"entities_replaced":2,"entity_types":["BR_PATIENT_NAME","BR_CPF"]}}'
+else
+  echo '{"ok":false,"reason":"stdin_missing"}'
+fi
+`,
+      { encoding: "utf8" },
+    )
+    await chmod(globalPhi, 0o755)
+
+    const runner = createPhiRunner({
+      searchStart: projectDir,
+      fallbackCommands: [join(root, "missing-phi"), globalPhi],
+    })
+
+    const result = await runner("Paciente Joao CPF 935.411.347-80")
+
+    expect(result).toEqual({
+      ok: true,
+      scrubbed_text: "Paciente [PACIENTE_001] CPF [CPF_001]",
+      session_id: "phi-global",
+      summary: { entities_replaced: 2, entity_types: ["BR_PATIENT_NAME", "BR_CPF"] },
+    })
+  })
+
   test("times out and fails closed when the CLI hangs", async () => {
     delete process.env.PHI_CLI_COMMAND
     const projectDir = await mkdtemp(join(tmpdir(), "phi-runner-timeout-"))

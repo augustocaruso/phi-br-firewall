@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
+import { homedir } from "node:os"
 import { dirname, join, parse, resolve } from "node:path"
 
 export type PhiRedactSuccess = {
@@ -19,6 +20,7 @@ export type PhiRunner = (text: string, sessionID?: string) => Promise<PhiRedactR
 
 export type PhiRunnerOptions = {
   command?: string
+  fallbackCommands?: string[]
   searchStart?: string
   timeoutMs?: number
 }
@@ -38,7 +40,7 @@ export function createPhiRunner(options: PhiRunnerOptions = {}): PhiRunner {
   return async (text) => {
     const searchStart = options.searchStart ?? process.cwd()
     const result = await runProcess(
-      resolvePhiCommand(searchStart, options.command),
+      resolvePhiCommand(searchStart, options.command, options.fallbackCommands),
       ["api", "redact", "--json"],
       text,
       {
@@ -87,7 +89,11 @@ export function createPhiRunner(options: PhiRunnerOptions = {}): PhiRunner {
 
 export const runPhiCli: PhiRunner = createPhiRunner()
 
-function resolvePhiCommand(searchStart: string, command = process.env.PHI_CLI_COMMAND) {
+function resolvePhiCommand(
+  searchStart: string,
+  command = process.env.PHI_CLI_COMMAND,
+  fallbackCommands = defaultPhiCommands(),
+) {
   if (command) return command
 
   let directory = resolve(searchStart)
@@ -95,9 +101,20 @@ function resolvePhiCommand(searchStart: string, command = process.env.PHI_CLI_CO
   while (true) {
     const candidate = join(directory, ".venv", "bin", "phi")
     if (existsSync(candidate)) return candidate
-    if (directory === root) return "phi"
+    if (directory === root) {
+      const fallback = fallbackCommands.find((path) => existsSync(path))
+      return fallback ?? "phi"
+    }
     directory = dirname(directory)
   }
+}
+
+function defaultPhiCommands() {
+  return [
+    join(homedir(), ".local", "bin", "phi"),
+    "/opt/homebrew/bin/phi",
+    "/usr/local/bin/phi",
+  ]
 }
 
 function runProcess(

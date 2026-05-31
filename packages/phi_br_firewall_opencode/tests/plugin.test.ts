@@ -12,6 +12,20 @@ const pluginInput = {
   $: {} as never,
 }
 
+function makePromptClient() {
+  const promptCalls: unknown[] = []
+  return {
+    promptCalls,
+    client: {
+      session: {
+        prompt: async (payload: unknown) => {
+          promptCalls.push(payload)
+        },
+      },
+    },
+  }
+}
+
 describe("Phi OpenCode plugin", () => {
   test("entrypoint exposes only the server plugin function", async () => {
     const module = await import("../src/plugin.js")
@@ -50,14 +64,16 @@ describe("Phi OpenCode plugin", () => {
     const output = { parts: [] as Array<{ type: "text"; text: string; synthetic?: boolean }> }
     const originalParts = output.parts
 
-    await hooks["command.execute.before"]?.(
-      {
-        command: "phi",
-        sessionID: "session-1",
-        arguments: "Paciente Joao CPF 123.456.789-09",
-      },
-      output as never,
-    )
+    await expect(
+      hooks["command.execute.before"]?.(
+        {
+          command: "phi",
+          sessionID: "session-1",
+          arguments: "Paciente Joao CPF 123.456.789-09",
+        },
+        output as never,
+      ),
+    ).resolves.toBeUndefined()
 
     expect(output.parts).toBe(originalParts)
     expect(output.parts).toEqual([
@@ -71,10 +87,56 @@ describe("Phi OpenCode plugin", () => {
     expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
   })
 
-  test("aborts command execution instead of sending a diagnostic prompt when redaction fails", async () => {
+  test("prints the redacted phi command input visibly in the session", async () => {
+    const promptClient = makePromptClient()
+    const hooks = createPhiHooks(async () => ({
+      ok: true,
+      scrubbed_text: "Paciente [PACIENTE_001] CPF [CPF_001]",
+      session_id: "phi-session-1",
+      summary: { entities_replaced: 2, entity_types: ["BR_CPF", "BR_PATIENT_NAME"] },
+    }), { client: promptClient.client as never })
+
+    const output = { parts: [] as Array<{ type: "text"; text: string; synthetic?: boolean }> }
+
+    await hooks["command.execute.before"]?.(
+      {
+        command: "phi",
+        sessionID: "session-1",
+        arguments: "Paciente Joao CPF 123.456.789-09",
+      },
+      output as never,
+    )
+
+    expect(output.parts).toEqual([
+      {
+        type: "text",
+        text: "Paciente [PACIENTE_001] CPF [CPF_001]",
+        synthetic: true,
+      },
+    ])
+    expect(promptClient.promptCalls).toEqual([
+      {
+        path: { id: "session-1" },
+        body: {
+          noReply: true,
+          parts: [
+            {
+              type: "text",
+              text: "Paciente [PACIENTE_001] CPF [CPF_001]",
+              ignored: true,
+            },
+          ],
+        },
+      },
+    ])
+    expect(JSON.stringify(promptClient.promptCalls)).not.toContain("Joao")
+    expect(JSON.stringify(promptClient.promptCalls)).not.toContain("123.456.789-09")
+  })
+
+  test("replaces command text with a safe failure notice when redaction fails", async () => {
     const hooks = createPhiHooks(async () => ({
       ok: false,
-      reason: "audit_failed",
+      reason: "audit failed",
     }))
 
     const output = { parts: [] as Array<{ type: "text"; text: string; synthetic?: boolean }> }
@@ -89,13 +151,13 @@ describe("Phi OpenCode plugin", () => {
         },
         output as never,
       ),
-    ).rejects.toThrow("PHI_REDACTION_FAILED")
+    ).resolves.toBeUndefined()
 
     expect(output.parts).toBe(originalParts)
     expect(output.parts).toEqual([
       {
         type: "text",
-        text: "[PHI_REDACTION_FAILED]",
+        text: '[PHI_REDACTION_FAILED]\nResponda ao usuario exatamente: "Phi bloqueou esta mensagem antes do modelo. Motivo: audit_failed."',
         synthetic: true,
       },
     ])
@@ -104,7 +166,7 @@ describe("Phi OpenCode plugin", () => {
     expect(JSON.stringify(output.parts)).not.toContain("phi check")
   })
 
-  test("aborts slash phi chat messages without leaking raw text when redaction fails", async () => {
+  test("replaces slash phi chat messages with a safe failure notice when redaction fails", async () => {
     const hooks = createPhiHooks(async () => ({
       ok: false,
       reason: "cli_timeout",
@@ -132,13 +194,13 @@ describe("Phi OpenCode plugin", () => {
         },
         output as never,
       ),
-    ).rejects.toThrow("PHI_REDACTION_FAILED")
+    ).resolves.toBeUndefined()
 
     expect(output.parts).toBe(originalParts)
     expect(output.parts).toEqual([
       {
         type: "text",
-        text: "[PHI_REDACTION_FAILED]",
+        text: '[PHI_REDACTION_FAILED]\nResponda ao usuario exatamente: "Phi bloqueou esta mensagem antes do modelo. Motivo: cli_timeout."',
         synthetic: true,
       },
     ])
