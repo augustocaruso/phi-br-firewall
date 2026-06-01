@@ -29,7 +29,7 @@ def test_redact_and_restore_active_text_without_clipboard(
 
     assert redacted.ok is True
     assert redacted.action == "redact"
-    assert "[PACIENTE_001]" in redacted.redacted_text
+    assert "[PACIENTE_001" in redacted.redacted_text
     assert "[CPF_001]" in redacted.redacted_text
     assert "Joao da Silva" not in redacted.redacted_text
     assert "935.411.347-80" not in redacted.redacted_text
@@ -38,6 +38,37 @@ def test_redact_and_restore_active_text_without_clipboard(
     assert restored.restored_text == raw_text
     assert restored.contains_phi is True
     assert restored.sessions_used == [redacted.session_id]
+
+
+def test_restore_active_text_applies_render_options(tmp_path: Path) -> None:
+    policy = PhiPolicy()
+    policy.mapping.base_dir = str(tmp_path)
+    raw_text = "Data do atendimento: 20/10/2024\nPaciente JOAO DA SILVA."
+
+    redacted = redact_text(raw_text, policy)
+    restored = restore_active_text(
+        "Atendimento em [DATA_001|date=long]. Paciente [PACIENTE_001|case=title].",
+        policy,
+    )
+
+    assert redacted.ok is True
+    assert "[DATA_001:" in redacted.redacted_text
+    assert "[PACIENTE_001:" in redacted.redacted_text
+    assert restored.ok is True
+    assert restored.restored_text == "Atendimento em 20 de outubro de 2024. Paciente Joao da Silva."
+
+
+def test_restore_active_text_rejects_invalid_render_options(tmp_path: Path) -> None:
+    policy = PhiPolicy()
+    policy.mapping.base_dir = str(tmp_path)
+
+    redacted = redact_text("Paciente Ana.", policy)
+    restored = restore_active_text("Paciente [PACIENTE_001|case=sentence].", policy)
+
+    assert redacted.ok is True
+    assert restored.ok is False
+    assert restored.reason == "invalid_render_option"
+    assert restored.restored_text == ""
 
 
 def test_restore_active_text_without_placeholders_is_noop(tmp_path: Path) -> None:

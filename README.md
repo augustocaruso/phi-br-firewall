@@ -71,10 +71,48 @@ Paciente Joao da Silva, CPF 935.411.347-80.
 becomes:
 
 ```text
-Paciente [PACIENTE_001], CPF [CPF_001].
+Paciente [PACIENTE_001: kind=name; role=patient; case=title; form=full], [CPF_001].
 ```
 
 The model sees the placeholder text. The mapping stays local.
+
+## Annotated Placeholders
+
+Phi can add safe metadata inside placeholders so an agent has enough context to
+write useful clinical prose without seeing the original private value.
+
+Examples:
+
+```text
+[PACIENTE_001: kind=name; role=patient; case=upper; form=full]
+[DATA_010: kind=date; role=event; rel=T-19m; gran=month; src_fmt=month/yyyy]
+[IDADE_007: kind=age; band=escolar; src=exact]
+```
+
+The part after `:` is public metadata. It may describe category, role, original
+case, date granularity, source format, relative chronology, or age band. It must
+not contain the raw name, date, address, document number, or exact age.
+
+When the model wants local restore to format the original private value, it can
+return render options after `|`:
+
+```text
+[PACIENTE_001|case=title]
+[DATA_010|date=long]
+[DATA_010|date=month_year]
+```
+
+Supported options:
+
+```text
+case=original|title|upper|lower
+date=original|short|medium|long|month_year|iso
+```
+
+If no render option is provided, `phi restore` restores the exact original value
+from the local mapping. If the model removes a placeholder entirely and rewrites
+the information as free prose, `phi restore` does not reinsert that private
+value.
 
 ## OpenCode Workflow
 
@@ -136,7 +174,7 @@ The response contains redacted text only:
 {
   "ok": true,
   "action": "redact",
-  "redacted_text": "Paciente [PACIENTE_001], CPF [CPF_001].",
+  "redacted_text": "Paciente [PACIENTE_001: kind=name; role=patient; case=title; form=full], [CPF_001].",
   "session_id": "phi-...",
   "summary": {
     "entities_replaced": 2,
@@ -148,7 +186,7 @@ The response contains redacted text only:
 To restore placeholders through stdout:
 
 ```bash
-printf '%s' 'Paciente [PACIENTE_001], CPF [CPF_001].' | phi api restore --json
+printf '%s' 'Paciente [PACIENTE_001|case=title], [CPF_001].' | phi api restore --json
 ```
 
 Successful restore output contains PHI by definition and is marked explicitly:

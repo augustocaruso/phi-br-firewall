@@ -32,7 +32,7 @@ def test_redact_and_restore_clipboard_without_printing_phi(
     assert redact_payload["ok"] is True
     assert redact_payload["action"] == "clipboard_redacted"
     assert redact_payload["printed_phi"] is False
-    assert "[PACIENTE_001]" in clipboard["text"]
+    assert "[PACIENTE_001" in clipboard["text"]
     assert "[CPF_001]" in clipboard["text"]
     assert "935.411.347-80" not in clipboard["text"]
     assert "935.411.347-80" not in redact.stdout
@@ -253,7 +253,7 @@ def test_scrub_stdin_outputs_safe_json_without_printing_phi(
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["ok"] is True
-    assert "[PACIENTE_001]" in payload["scrubbed_text"]
+    assert "[PACIENTE_001" in payload["scrubbed_text"]
     assert "[CPF_001]" in payload["scrubbed_text"]
     assert payload["session_id"]
     assert payload["summary"]["entities_replaced"] == 2
@@ -282,7 +282,7 @@ def test_api_redact_and_restore_use_stdin_stdout_without_clipboard(
     redact_payload = json.loads(redact.stdout)
     assert redact_payload["ok"] is True
     assert redact_payload["action"] == "redact"
-    assert "[PACIENTE_001]" in redact_payload["redacted_text"]
+    assert "[PACIENTE_001" in redact_payload["redacted_text"]
     assert "[CPF_001]" in redact_payload["redacted_text"]
     assert redact_payload["session_id"]
     assert redact_payload["summary"]["entities_replaced"] == 2

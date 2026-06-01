@@ -96,7 +96,7 @@ def _scrub_without_persistence(
             counters[prefix] = next_count
             placeholder_key = f"{prefix}_{next_count:03d}"
             by_value[(finding.entity_type, finding.text)] = placeholder_key
-        replacements.append((finding, renderer.render(placeholder_key, finding)))
+        replacements.append((finding, renderer.render(placeholder_key, finding).text))
 
     for finding, replacement in sorted(
         replacements, key=lambda item: item[0].start, reverse=True

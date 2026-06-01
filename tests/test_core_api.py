@@ -81,16 +81,28 @@ Bruno (interno eletivo) sob orientacao de Dra Renata Alves.
     assert "agosto/2023" not in scrub.scrubbed_text
     assert "dezembro/2024" not in scrub.scrubbed_text
     assert "ha 3 anos" in scrub.scrubbed_text
-    assert "[INSTITUICAO_001]" in scrub.scrubbed_text
-    assert "[FAMILIAR_001]" in scrub.scrubbed_text
-    assert "[PROFISSIONAL_001]" in scrub.scrubbed_text
-    assert "[IDADE_001: escolar]" in scrub.scrubbed_text
-    assert "[IDADE_002: lactente]" in scrub.scrubbed_text
-    assert "[IDADE_003: pre-escolar]" in scrub.scrubbed_text
-    assert "[DATA_001: T0]" in scrub.scrubbed_text
-    assert "[DATA_002: nascimento]" in scrub.scrubbed_text
-    assert "[DATA_003: T-14m]" in scrub.scrubbed_text
-    assert "[DATA_004: T+2m]" in scrub.scrubbed_text
+    assert "[INSTITUICAO_001: kind=institution; case=title; form=name]" in scrub.scrubbed_text
+    assert "[FAMILIAR_001: kind=name; role=family; case=title; form=single]" in (
+        scrub.scrubbed_text
+    )
+    assert "[PROFISSIONAL_001: kind=name; role=professional; case=mixed; form=full]" in (
+        scrub.scrubbed_text
+    )
+    assert "[IDADE_001: kind=age; band=escolar; src=exact]" in scrub.scrubbed_text
+    assert "[IDADE_002: kind=age; band=lactente; src=exact]" in scrub.scrubbed_text
+    assert "[IDADE_003: kind=age; band=pre-escolar; src=exact]" in scrub.scrubbed_text
+    assert "[DATA_001: kind=date; role=event; rel=T0; gran=day; src_fmt=dd/mm/yyyy]" in (
+        scrub.scrubbed_text
+    )
+    assert "[DATA_002: kind=date; role=birth; gran=day; src_fmt=dd/mm/yyyy]" in (
+        scrub.scrubbed_text
+    )
+    assert "[DATA_003: kind=date; role=event; rel=T-14m; gran=month; src_fmt=month/yyyy]" in (
+        scrub.scrubbed_text
+    )
+    assert "[DATA_004: kind=date; role=event; rel=T+2m; gran=month; src_fmt=month/yyyy]" in (
+        scrub.scrubbed_text
+    )
 
     restored = restore_text(scrub.scrubbed_text, scrub.mapping_path)
 
@@ -104,9 +116,13 @@ def test_date_of_birth_context_does_not_leak_to_following_event_date(tmp_path) -
 
     scrub = scrub_text(text, policy)
 
-    assert "[DATA_001: nascimento]" in scrub.scrubbed_text
-    assert "[DATA_002: T0]" in scrub.scrubbed_text
-    assert "[DATA_002: nascimento]" not in scrub.scrubbed_text
+    assert "[DATA_001: kind=date; role=birth; gran=day; src_fmt=dd/mm/yyyy]" in (
+        scrub.scrubbed_text
+    )
+    assert "[DATA_002: kind=date; role=event; rel=T0; gran=month; src_fmt=month/yyyy]" in (
+        scrub.scrubbed_text
+    )
+    assert "[DATA_002: kind=date; role=birth" not in scrub.scrubbed_text
 
 
 def test_date_of_birth_context_does_not_leak_within_same_line(tmp_path) -> None:
@@ -116,9 +132,13 @@ def test_date_of_birth_context_does_not_leak_within_same_line(tmp_path) -> None:
 
     scrub = scrub_text(text, policy)
 
-    assert "[DATA_001: nascimento]" in scrub.scrubbed_text
-    assert "[DATA_002: T0]" in scrub.scrubbed_text
-    assert "[DATA_002: nascimento]" not in scrub.scrubbed_text
+    assert "[DATA_001: kind=date; role=birth; gran=day; src_fmt=dd/mm/yyyy]" in (
+        scrub.scrubbed_text
+    )
+    assert "[DATA_002: kind=date; role=event; rel=T0; gran=month; src_fmt=month/yyyy]" in (
+        scrub.scrubbed_text
+    )
+    assert "[DATA_002: kind=date; role=birth" not in scrub.scrubbed_text
 
 
 def test_scrub_covers_identity_address_and_doctor_title_leaks(tmp_path) -> None:
@@ -146,11 +166,11 @@ Sob orientacao do Dr. Carlos Lima (staff)
     assert "Dr." not in scrub.scrubbed_text
     assert "Carlos Lima" not in scrub.scrubbed_text
     assert "Sob orientacao do [PROFISSIONAL_001]" not in scrub.scrubbed_text
-    assert "Sob orientacao [PROFISSIONAL_001]" in scrub.scrubbed_text
-    assert "[PACIENTE_001]" in scrub.scrubbed_text
+    assert "Sob orientacao [PROFISSIONAL_001:" in scrub.scrubbed_text
+    assert "[PACIENTE_001:" in scrub.scrubbed_text
     assert "[ENDERECO_001]" in scrub.scrubbed_text
     assert "[ENDERECO_002]" in scrub.scrubbed_text
-    assert "[PROFISSIONAL_001]" in scrub.scrubbed_text
+    assert "[PROFISSIONAL_001:" in scrub.scrubbed_text
 
 
 def test_scrub_preserves_prescription_duration(tmp_path) -> None:

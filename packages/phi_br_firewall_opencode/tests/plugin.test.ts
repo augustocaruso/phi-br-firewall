@@ -32,8 +32,11 @@ function expectModelPhiPayload(value: unknown, redactedText: string) {
   expect(text).toContain("<phi_context>")
   expect(text).toContain("Responda normalmente ao pedido do usuario")
   expect(text).toContain("sem tentar inferir ou pedir os valores originais")
-  expect(text).toContain("[DATA_010: T-19m]")
-  expect(text).toContain("mantenha o placeholder formatado")
+  expect(text).toContain("kind=date")
+  expect(text).toContain("[PACIENTE_001|case=title]")
+  expect(text).toContain("[DATA_010|date=long]")
+  expect(text).toContain("case=original|title|upper|lower")
+  expect(text).toContain("date=original|short|medium|long|month_year|iso")
   expect(text).toContain("<texto_redatado>")
   expect(text).toContain(`${redactedText}\n</texto_redatado>`)
 }

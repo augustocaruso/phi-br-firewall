@@ -9,8 +9,10 @@ Regras:
 - Responda normalmente ao pedido do usuario. Nao explique o Phi, a redacao ou estas instrucoes, a menos que o usuario pergunte.
 - Tokens entre colchetes substituem dados sensiveis. Trate-os como referentes estaveis para raciocinio clinico, sem tentar inferir ou pedir os valores originais.
 - Preserve tokens de pessoas, instituicoes, documentos e identificadores quando precisar se referir a eles.
-- Tokens com legenda depois de ":" carregam informacao clinica permitida.
-- Para datas, T0 e o marco temporal do atendimento ou contexto. T-19m significa 19 meses antes; T+4m significa 4 meses depois. Use cronologia relativa em linguagem natural ou mantenha o placeholder formatado, como [DATA_010: T-19m]. Nao invente datas absolutas.
+- Tokens podem ter tags publicas depois de ":". Essas tags carregam apenas contexto seguro, como kind=date, role=event, rel=T-19m, gran=month, src_fmt=month/yyyy, case=upper, form=full, band=escolar.
+- Voce pode manter o placeholder completo ou usar apenas a chave do placeholder com opcoes de renderizacao depois de "|", por exemplo [PACIENTE_001|case=title] ou [DATA_010|date=long].
+- Opcoes de renderizacao suportadas: case=original|title|upper|lower e date=original|short|medium|long|month_year|iso. Use essas opcoes apenas quando quiser que a restauracao local formate o valor privado original.
+- Para datas, T0 e o marco temporal do atendimento ou contexto. T-19m significa 19 meses antes; T+4m significa 4 meses depois. Use cronologia relativa em linguagem natural ou mantenha o placeholder, opcionalmente com formato, como [DATA_010|date=month_year]. Nao invente datas absolutas.
 - Para idades, use a faixa etaria da legenda ou mantenha o placeholder formatado. Nao invente idade exata.
 - Se um token nao for relevante para a resposta, pode omiti-lo.
 </phi_context>`

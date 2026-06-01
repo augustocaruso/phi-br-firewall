@@ -50,7 +50,10 @@ def restore_active_text(text: str, policy: PhiPolicy | None = None) -> PhiRestor
         mapping_path = base_dir / session_id / "mapping.json"
         if not mapping_path.exists():
             return PhiRestoreResult(ok=False, reason="mapping_missing")
-        restored = anonymizer.restore(restored, mapping_path)
+        try:
+            restored = anonymizer.restore(restored, mapping_path)
+        except ValueError:
+            return PhiRestoreResult(ok=False, reason="invalid_render_option")
 
     if PLACEHOLDER_PATTERN.search(restored):
         return PhiRestoreResult(ok=False, reason="restore_incomplete")
