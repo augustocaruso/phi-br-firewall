@@ -108,9 +108,13 @@ install_spacy_model() {
   log "installing pt_core_news_md into the phi tool environment"
   case "$SPACY_PT_MODEL_PACKAGE" in
     http://*|https://*)
-      local temp_dir wheel_path
+      local temp_dir wheel_name wheel_path
       temp_dir="$(mktemp -d)"
-      wheel_path="$temp_dir/pt_core_news_md.whl"
+      wheel_name="${SPACY_PT_MODEL_PACKAGE##*/}"
+      wheel_name="${wheel_name%%\?*}"
+      wheel_name="${wheel_name%%#*}"
+      [ -n "$wheel_name" ] || wheel_name="pt_core_news_md-3.8.0-py3-none-any.whl"
+      wheel_path="$temp_dir/$wheel_name"
       if command -v curl >/dev/null 2>&1; then
         if ! curl --retry 3 -fL "$SPACY_PT_MODEL_PACKAGE" -o "$wheel_path"; then
           rm -rf "$temp_dir"
