@@ -6,6 +6,7 @@ from presidio_analyzer import EntityRecognizer, RecognizerResult
 from presidio_analyzer.nlp_engine import NlpArtifacts
 
 from phi_br_core.entities import BR_ADDRESS
+from phi_br_core.placeholders import parse_placeholder
 
 _ADDRESS_LABEL_RE = re.compile(
     r"(?im)^\s*(?:endere[cç]o|resid[eê]ncia|moradia|bairro)\s*:\s*(?P<address>[^\n\r]+)"
@@ -18,7 +19,6 @@ _NEXT_FIELD_RE = re.compile(
     r"\s+\b(?:telefone|tel|celular|cep|cpf|cns|prontu[aá]rio|dn|idade|nome)\b\s*:?",
     re.IGNORECASE,
 )
-_PLACEHOLDER_RE = re.compile(r"^\[[A-Z0-9_]+_\d{3}(?:[^\]]*)?\]$")
 
 
 class AddressBrRecognizer(EntityRecognizer):
@@ -68,7 +68,7 @@ class AddressBrRecognizer(EntityRecognizer):
             end = _trim_address_end(text, start, end)
             if end <= start:
                 continue
-            if _PLACEHOLDER_RE.fullmatch(text[start:end].strip()):
+            if _is_placeholder(text[start:end].strip()):
                 continue
             results.append(
                 RecognizerResult(
@@ -89,3 +89,11 @@ def _trim_address_end(text: str, start: int, end: int) -> int:
     while end > start and text[end - 1] in " .,:;":
         end -= 1
     return end
+
+
+def _is_placeholder(value: str) -> bool:
+    try:
+        parse_placeholder(value)
+    except ValueError:
+        return False
+    return True

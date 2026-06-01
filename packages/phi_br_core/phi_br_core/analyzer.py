@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 
 from presidio_analyzer import (
     AnalyzerEngine,
@@ -28,6 +29,15 @@ from phi_br_core.recognizers.email_br import EmailBrRecognizer
 from phi_br_core.recognizers.institutions import InstitutionRecognizer
 from phi_br_core.recognizers.names_context import ClinicalNameContextRecognizer
 from phi_br_core.recognizers.phone_br import PhoneBrRecognizer
+
+
+@dataclass(frozen=True)
+class _AnalyzerCacheKey:
+    languages: tuple[str, ...]
+    min_score: float
+
+
+_ANALYZER_CACHE: dict[_AnalyzerCacheKey, AnalyzerEngine] = {}
 
 
 class _SimpleNlpEngine(NlpEngine):
@@ -129,6 +139,10 @@ def _languages_for(policy: PhiPolicy) -> list[str]:
     return languages
 
 
+def clear_analyzer_cache() -> None:
+    _ANALYZER_CACHE.clear()
+
+
 def build_registry(languages: list[str] | None = None) -> RecognizerRegistry:
     supported_languages = languages if languages is not None else ["pt", "en"]
     registry = RecognizerRegistry(supported_languages=supported_languages)
@@ -166,11 +180,18 @@ def _remove_conflicting_predefined_recognizers(registry: RecognizerRegistry) -> 
 
 def build_analyzer(policy: PhiPolicy) -> AnalyzerEngine:
     languages = _languages_for(policy)
+    cache_key = _AnalyzerCacheKey(languages=tuple(languages), min_score=policy.min_score)
+    cached = _ANALYZER_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     registry = build_registry(languages)
-    return AnalyzerEngine(
+    analyzer = AnalyzerEngine(
         registry=registry,
         nlp_engine=_SimpleNlpEngine(languages),
         supported_languages=languages,
         default_score_threshold=policy.min_score,
         context_aware_enhancer=_NoOpContextAwareEnhancer(),
     )
+    _ANALYZER_CACHE[cache_key] = analyzer
+    return analyzer

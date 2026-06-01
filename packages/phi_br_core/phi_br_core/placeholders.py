@@ -3,7 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-_PLACEHOLDER_RE = re.compile(r"^\[(?P<body>[^\[\]]+)\]$")
+PLACEHOLDER_PATTERN = re.compile(r"\[(?P<key>[A-Z0-9_]+_\d{3})(?:[^\]]*)?\]")
+_FULL_PLACEHOLDER_RE = re.compile(r"^\[(?P<body>[^\[\]]+)\]$")
 _KEY_RE = re.compile(r"^[A-Z0-9_]+_\d{3}$")
 _TAG_RE = re.compile(r"^[a-z][a-z0-9_]*=[A-Za-z0-9_./:+-]+$")
 
@@ -15,8 +16,44 @@ class Placeholder:
     render_options: dict[str, str] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class PlaceholderOccurrence:
+    placeholder: Placeholder
+    start: int
+    end: int
+    text: str
+
+
+def iter_placeholders(text: str) -> list[PlaceholderOccurrence]:
+    return [
+        PlaceholderOccurrence(
+            placeholder=parse_placeholder(match.group(0)),
+            start=match.start(),
+            end=match.end(),
+            text=match.group(0),
+        )
+        for match in PLACEHOLDER_PATTERN.finditer(text)
+    ]
+
+
+def extract_placeholder_keys(text: str) -> list[str]:
+    keys: list[str] = []
+    seen: set[str] = set()
+    for match in PLACEHOLDER_PATTERN.finditer(text):
+        key = match.group("key")
+        if key in seen:
+            continue
+        seen.add(key)
+        keys.append(key)
+    return keys
+
+
+def contains_placeholder(text: str) -> bool:
+    return PLACEHOLDER_PATTERN.search(text) is not None
+
+
 def parse_placeholder(value: str) -> Placeholder:
-    match = _PLACEHOLDER_RE.fullmatch(value.strip())
+    match = _FULL_PLACEHOLDER_RE.fullmatch(value.strip())
     if match is None:
         raise ValueError("invalid placeholder")
 
@@ -59,4 +96,3 @@ def parse_tag_list(value: str) -> dict[str, str]:
 
 def serialize_tag_list(tags: dict[str, str]) -> str:
     return "; ".join(f"{key}={value}" for key, value in tags.items())
-

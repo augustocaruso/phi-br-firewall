@@ -12,12 +12,11 @@ from phi_br_core.entities import ENTITY_TO_PLACEHOLDER_PREFIX
 from phi_br_core.formatting import apply_text_case
 from phi_br_core.mapping import PlaceholderIndex, write_json_atomic
 from phi_br_core.models import PhiAuditResult, PhiFinding, PhiScrubResult, PhiScrubSummary
-from phi_br_core.placeholders import parse_placeholder
+from phi_br_core.placeholders import PLACEHOLDER_PATTERN, parse_placeholder
 from phi_br_core.policy import PhiPolicy
 from phi_br_core.sessions import SessionStore
 from phi_br_core.spans import resolve_overlaps
 
-_PLACEHOLDER_RE = re.compile(r"\[[A-Z0-9_]+_\d{3}(?:[^\]]*)?\]")
 _SUPPORTED_RENDER_OPTIONS = {"case", "date"}
 
 
@@ -95,42 +94,48 @@ class StablePlaceholderAnonymizer:
         )
 
     def restore(self, text: str, mapping_path: Path | str) -> str:
-        mapping = self._read_mapping(Path(mapping_path))
-
-        def replace(match: re.Match[str]) -> str:
-            placeholder = parse_placeholder(match.group(0))
-            item = mapping.get(placeholder.key)
-            if item is None:
-                return match.group(0)
-            return _render_mapping_item(item, placeholder.render_options)
-
-        return _PLACEHOLDER_RE.sub(replace, text)
+        return restore_placeholders_once(text, read_mapping_items(Path(mapping_path)))
 
     @staticmethod
     def _read_mapping(mapping_path: Path) -> dict[str, dict[str, Any]]:
-        raw: Any = json.loads(mapping_path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raise ValueError("invalid mapping file")
-        items = raw.get("items")
-        if not isinstance(items, dict):
-            raise ValueError("invalid mapping file")
+        return read_mapping_items(mapping_path)
 
-        parsed: dict[str, dict[str, Any]] = {}
-        for key, value in items.items():
-            if not isinstance(key, str) or not isinstance(value, dict):
-                continue
-            original = value.get("value")
-            entity_type = value.get("entity_type")
-            if isinstance(original, str) and isinstance(entity_type, str):
-                public_meta = value.get("public_meta")
-                private_meta = value.get("private_meta")
-                parsed[key] = {
-                    "value": original,
-                    "entity_type": entity_type,
-                    "public_meta": public_meta if isinstance(public_meta, dict) else {},
-                    "private_meta": private_meta if isinstance(private_meta, dict) else {},
-                }
-        return parsed
+
+def read_mapping_items(mapping_path: Path) -> dict[str, dict[str, Any]]:
+    raw: Any = json.loads(mapping_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("invalid mapping file")
+    items = raw.get("items")
+    if not isinstance(items, dict):
+        raise ValueError("invalid mapping file")
+
+    parsed: dict[str, dict[str, Any]] = {}
+    for key, value in items.items():
+        if not isinstance(key, str) or not isinstance(value, dict):
+            continue
+        original = value.get("value")
+        entity_type = value.get("entity_type")
+        if isinstance(original, str) and isinstance(entity_type, str):
+            public_meta = value.get("public_meta")
+            private_meta = value.get("private_meta")
+            parsed[key] = {
+                "value": original,
+                "entity_type": entity_type,
+                "public_meta": public_meta if isinstance(public_meta, dict) else {},
+                "private_meta": private_meta if isinstance(private_meta, dict) else {},
+            }
+    return parsed
+
+
+def restore_placeholders_once(text: str, mapping: dict[str, dict[str, Any]]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        placeholder = parse_placeholder(match.group(0))
+        item = mapping.get(placeholder.key)
+        if item is None:
+            return match.group(0)
+        return _render_mapping_item(item, placeholder.render_options)
+
+    return PLACEHOLDER_PATTERN.sub(replace, text)
 
 
 def _render_mapping_item(item: dict[str, Any], render_options: dict[str, str]) -> str:

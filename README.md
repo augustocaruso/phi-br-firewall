@@ -152,6 +152,7 @@ Useful lifecycle commands:
 
 ```bash
 phi check
+phi bench --iterations 3
 phi status
 phi purge
 phi purge --all
@@ -250,6 +251,7 @@ uv sync
 uv run pytest -v
 uv run ruff check packages tests
 uv run mypy packages/phi_br_core/phi_br_core
+uv run phi bench --iterations 3
 
 cd packages/phi_br_firewall_opencode
 npm run typecheck

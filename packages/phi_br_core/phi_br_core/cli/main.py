@@ -13,6 +13,7 @@ from phi_br_core import clipboard
 from phi_br_core.analyzer import build_analyzer, build_registry
 from phi_br_core.api import redact_text, restore_active_text
 from phi_br_core.audit import audit_text
+from phi_br_core.bench import run_benchmark
 from phi_br_core.core import scrub_text
 from phi_br_core.mapping import PlaceholderIndex
 from phi_br_core.policy import PhiPolicy
@@ -92,6 +93,16 @@ def check() -> None:
             "base_dir_writable": True,
         }
     )
+
+
+@app.command()
+def bench(
+    iterations: int = typer.Option(3, "--iterations", min=1, help="Iterations per benchmark."),
+) -> None:
+    """Measure local phi runtime costs with synthetic text only."""
+    policy = _policy()
+    _purge_expired(policy)
+    _echo_json(run_benchmark(policy, iterations=iterations))
 
 
 @app.command()
