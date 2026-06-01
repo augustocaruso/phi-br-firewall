@@ -191,6 +191,23 @@ def test_nlp_recognizer_rejects_clinical_words_months_and_verbs_as_people() -> N
     assert recognizer.analyze(text, [BR_PERSON_NAME]) == []
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "internacao por Sindrome Catatonica",
+        "Sindrome Catatonica",
+    ],
+)
+def test_nlp_recognizer_rejects_diagnosis_phrase_marked_as_person(value: str) -> None:
+    text = "Paciente com internacao por Sindrome Catatonica."
+    recognizer = NlpEntityRecognizer(
+        NlpPolicy(enabled=True),
+        nlp=FakeNlp([fake_entity(text, value, "PER")]),
+    )
+
+    assert recognizer.analyze(text, [BR_PERSON_NAME]) == []
+
+
 def test_nlp_recognizer_rejects_spans_crossing_lines_and_admin_labels() -> None:
     text = "Naturalidade: Barra Ficticia-BA\nFiliacao: Eloisio Exemplo, Maria Exemplo"
     value = "Barra Ficticia-BA\nFiliacao"

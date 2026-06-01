@@ -172,6 +172,29 @@ _CLINICAL_FALSE_POSITIVE_TERMS = {
     "vitamina b6",
     "vitamina d",
 }
+_CLINICAL_PERSON_FALSE_POSITIVE_WORDS = {
+    "ansiedade",
+    "ansioso",
+    "ansiosos",
+    "atopica",
+    "atópica",
+    "catatonia",
+    "catatonica",
+    "catatônica",
+    "compulsivo",
+    "dermatite",
+    "depressivo",
+    "depressivos",
+    "diagnostico",
+    "diagnóstico",
+    "esquizofrenia",
+    "internacao",
+    "internação",
+    "obsessivo",
+    "sindrome",
+    "síndrome",
+    "transtorno",
+}
 _MEDICATION_TERMS = {
     "aripiprazol",
     "buspirona",
@@ -237,6 +260,11 @@ _LOCATION_CONTEXT_RE = re.compile(
 _PLACEHOLDER_RE = re.compile(r"^\[[A-Z][A-Z0-9_]*_\d{3}(?::|\||\])")
 _TRAILING_DATE_FRAGMENT_RE = re.compile(
     r"\s+(?:dia|em)\s+\d{1,2}$",
+    flags=re.IGNORECASE,
+)
+_PERSON_DIAGNOSIS_CONTEXT_RE = re.compile(
+    r"(?:\binterna[cç][aã]o|\bmotivo\s+da\s+interna[cç][aã]o)"
+    r"\s+(?:por|de|com)\s*$",
     flags=re.IGNORECASE,
 )
 
@@ -370,6 +398,8 @@ def _is_clinical_false_positive(value: str) -> bool:
     if normalized in _CLINICAL_FALSE_POSITIVE_TERMS:
         return True
     words = set(re.findall(r"[a-zà-ú0-9]+", normalized))
+    if words & _CLINICAL_PERSON_FALSE_POSITIVE_WORDS:
+        return True
     if words & _MONTH_TERMS:
         return True
     return bool(words & _MEDICATION_TERMS)
@@ -377,6 +407,9 @@ def _is_clinical_false_positive(value: str) -> bool:
 
 def _reject_person_span(text: str, start: int, end: int) -> bool:
     value = text[start:end].strip()
+    prefix = text[max(0, start - 80) : start]
+    if _PERSON_DIAGNOSIS_CONTEXT_RE.search(prefix):
+        return True
     if re.search(r"[\d/]", value):
         return True
     if len(value.split()) > 1:
