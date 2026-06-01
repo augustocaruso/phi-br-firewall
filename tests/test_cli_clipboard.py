@@ -301,6 +301,48 @@ def test_redact_does_not_write_clipboard_when_scrub_fails(
     assert "Joao da Silva" not in result.stdout
 
 
+def test_redact_reports_clipboard_errors_without_traceback(monkeypatch, tmp_path: Path) -> None:
+    from phi_br_core.clipboard import ClipboardError
+
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "phi_br_core.clipboard.read_clipboard",
+        lambda: (_ for _ in ()).throw(ClipboardError("clipboard_unavailable")),
+    )
+
+    result = runner.invoke(app, ["redact"])
+
+    assert result.exit_code != 0
+    assert json.loads(result.stdout) == {
+        "ok": False,
+        "action": "clipboard_redact_failed",
+        "printed_phi": False,
+        "reason": "clipboard_unavailable",
+    }
+    assert "Traceback" not in result.stdout
+
+
+def test_restore_reports_clipboard_errors_without_traceback(monkeypatch, tmp_path: Path) -> None:
+    from phi_br_core.clipboard import ClipboardError
+
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        "phi_br_core.clipboard.read_clipboard",
+        lambda: (_ for _ in ()).throw(ClipboardError("clipboard_unavailable")),
+    )
+
+    result = runner.invoke(app, ["restore"])
+
+    assert result.exit_code != 0
+    assert json.loads(result.stdout) == {
+        "ok": False,
+        "action": "clipboard_restore_failed",
+        "printed_phi": False,
+        "reason": "clipboard_unavailable",
+    }
+    assert "Traceback" not in result.stdout
+
+
 def test_scrub_stdin_outputs_safe_json_without_printing_phi(
     monkeypatch, tmp_path: Path
 ) -> None:

@@ -121,12 +121,34 @@ def redact() -> None:
     """Redact clipboard text and write the safe text back to the clipboard."""
     policy = _policy()
     _purge_expired(policy)
-    source_text = clipboard.read_clipboard()
+    try:
+        source_text = clipboard.read_clipboard()
+    except clipboard.ClipboardError as error:
+        _echo_json(
+            {
+                "ok": False,
+                "action": "clipboard_redact_failed",
+                "printed_phi": False,
+                "reason": error.reason,
+            }
+        )
+        raise typer.Exit(code=1) from error
     result = scrub_text(source_text, policy)
     if not result.ok:
         _echo_json(_scrub_failure_payload("clipboard_redact_failed", result))
         raise typer.Exit(code=1)
-    clipboard.write_clipboard(result.scrubbed_text)
+    try:
+        clipboard.write_clipboard(result.scrubbed_text)
+    except clipboard.ClipboardError as error:
+        _echo_json(
+            {
+                "ok": False,
+                "action": "clipboard_redact_failed",
+                "printed_phi": False,
+                "reason": error.reason,
+            }
+        )
+        raise typer.Exit(code=1) from error
     _echo_json(
         {
             "ok": result.ok,
@@ -253,7 +275,18 @@ def api_restore(
 def restore() -> None:
     """Restore clipboard placeholders locally without printing restored text."""
     policy = _policy()
-    redacted_text = clipboard.read_clipboard()
+    try:
+        redacted_text = clipboard.read_clipboard()
+    except clipboard.ClipboardError as error:
+        _echo_json(
+            {
+                "ok": False,
+                "action": "clipboard_restore_failed",
+                "printed_phi": False,
+                "reason": error.reason,
+            }
+        )
+        raise typer.Exit(code=1) from error
     result = restore_active_text(redacted_text, policy)
     if not result.ok:
         _echo_json(
@@ -265,7 +298,18 @@ def restore() -> None:
             }
         )
         raise typer.Exit(code=1)
-    clipboard.write_clipboard(result.restored_text)
+    try:
+        clipboard.write_clipboard(result.restored_text)
+    except clipboard.ClipboardError as error:
+        _echo_json(
+            {
+                "ok": False,
+                "action": "clipboard_restore_failed",
+                "printed_phi": False,
+                "reason": error.reason,
+            }
+        )
+        raise typer.Exit(code=1) from error
     _echo_json({"ok": True, "action": "clipboard_restored", "printed_phi": False})
 
 
