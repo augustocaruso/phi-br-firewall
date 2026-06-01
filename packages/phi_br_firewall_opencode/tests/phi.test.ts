@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, test } from "vitest"
-import { createPhiRunner } from "../src/phi.js"
+import { createPhiRunner } from "../src/phi.ts"
 
 const originalPhiCliCommand = process.env.PHI_CLI_COMMAND
 const originalCwd = process.cwd()

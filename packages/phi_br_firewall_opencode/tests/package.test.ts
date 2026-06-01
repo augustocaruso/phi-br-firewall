@@ -17,4 +17,14 @@ describe("OpenCode package manifest", () => {
     expect(manifest.main).toBe("./src/plugin.ts")
     expect(manifest.exports?.["./server"]).toBe("./src/plugin.ts")
   })
+
+  test("uses runtime-loadable TypeScript imports from the installed source tree", async () => {
+    const sourceFiles = ["src/plugin.ts", "src/hooks.ts"]
+    const siblingJsImport = new RegExp(String.raw`from ["']\./[^"']+\.js["']`)
+
+    for (const sourceFile of sourceFiles) {
+      const source = await readFile(resolve(packageDir, sourceFile), "utf8")
+      expect(source).not.toMatch(siblingJsImport)
+    }
+  })
 })

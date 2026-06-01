@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { createPhiHooks } from "../src/hooks.js"
-import { server } from "../src/plugin.js"
+import { createPhiHooks } from "../src/hooks.ts"
+import { server } from "../src/plugin.ts"
 
 const pluginInput = {
   client: {} as never,
@@ -45,7 +45,7 @@ function expectModelPhiPayload(value: unknown, redactedText: string) {
 
 describe("Phi OpenCode plugin", () => {
   test("entrypoint exposes only the server plugin function", async () => {
-    const module = await import("../src/plugin.js")
+    const module = await import("../src/plugin.ts")
 
     expect(Object.keys(module).sort()).toEqual(["server"])
   })

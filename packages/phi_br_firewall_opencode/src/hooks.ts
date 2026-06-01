@@ -1,5 +1,5 @@
 import type { Hooks, PluginInput } from "@opencode-ai/plugin"
-import type { PhiRunner } from "./phi.js"
+import type { PhiRunner } from "./phi.ts"
 
 const failurePlaceholder = "[PHI_REDACTION_FAILED]"
 const modelInstruction = `<phi_context>

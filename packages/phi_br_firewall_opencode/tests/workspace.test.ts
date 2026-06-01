@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { resolvePhiSearchStart } from "../src/workspace.js"
+import { resolvePhiSearchStart } from "../src/workspace.ts"
 
 describe("OpenCode workspace resolution", () => {
   test("uses the real worktree for project sessions", () => {
