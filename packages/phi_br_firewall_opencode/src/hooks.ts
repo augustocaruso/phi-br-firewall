@@ -23,13 +23,25 @@ type HookOptions = {
 }
 
 function isPhiText(text: string) {
-  return text.trim().startsWith("/phi ")
+  return normalizePromptText(text).startsWith("/phi ")
 }
 
 type TextPart = { type: string; text?: string; synthetic?: boolean; [key: string]: unknown }
 
 function phiText(text: string) {
-  return text.trim().replace(/^\/phi\s+/, "")
+  return normalizePromptText(text).replace(/^\/phi\s+/, "")
+}
+
+function normalizePromptText(text: string) {
+  const trimmed = text.trim()
+  if (trimmed.length >= 2) {
+    const first = trimmed[0]
+    const last = trimmed[trimmed.length - 1]
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      return trimmed.slice(1, -1).trim()
+    }
+  }
+  return trimmed
 }
 
 async function replacePhiParts(

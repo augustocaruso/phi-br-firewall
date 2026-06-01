@@ -286,6 +286,39 @@ describe("Phi OpenCode plugin", () => {
     expect(JSON.stringify(output.parts)).not.toContain("raw:")
   })
 
+  test("redacts quoted slash phi messages produced by opencode run", async () => {
+    const hooks = createPhiHooks(async (text, sessionID) => {
+      expect(text).toBe("Paciente Joao CPF 123.456.789-09")
+      expect(sessionID).toBe("session-1")
+      return {
+        ok: true,
+        scrubbed_text: "Paciente [PACIENTE_001] CPF [CPF_001]",
+        session_id: "phi-session-1",
+        summary: { entities_replaced: 2, entity_types: ["BR_CPF", "BR_PATIENT_NAME"] },
+      }
+    })
+
+    const output = {
+      message: {} as never,
+      parts: [
+        {
+          id: "part-1",
+          sessionID: "session-1",
+          messageID: "message-1",
+          type: "text",
+          text: '"/phi Paciente Joao CPF 123.456.789-09"',
+        },
+      ],
+    }
+
+    await hooks["chat.message"]?.({ sessionID: "session-1" }, output as never)
+
+    expectModelPhiPayload(output.parts[0]?.text, "Paciente [PACIENTE_001] CPF [CPF_001]")
+    expect(JSON.stringify(output.parts)).not.toContain("Joao")
+    expect(JSON.stringify(output.parts)).not.toContain("123.456.789-09")
+  })
+
+
   test("redacts slash phi messages during model transform", async () => {
     const hooks = createPhiHooks(async (text, sessionID) => {
       expect(text).toBe("Paciente Joao CPF 123.456.789-09")
