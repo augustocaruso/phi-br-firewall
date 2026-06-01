@@ -31,10 +31,11 @@ _NAME = (
     r"|\s+[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][A-Za-zÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇáàâãéèêíìîóòôõúùûç]+){1,4}"
 )
 _FAMILY_FIELD_RE = re.compile(
-    rf"(?im)^\s*(?:filia[cç][aã]o|irm[aã]os?|contatos?)\s*:\s*(?P<value>[^\n\r]*?(?P<name>{_NAME}))"
+    rf"(?im)^[ \t]*(?:filia[cç][aã]o|irm[aã]os?|contatos?)[ \t]*:[ \t]*"
+    rf"(?P<value>[^\n\r]*?(?P<name>{_NAME}))"
 )
 _LOCATION_FIELD_RE = re.compile(
-    r"(?im)^\s*(?:naturalidade|proced[eê]ncia)\s*:\s*(?P<value>(?!\[)[^\n\r]+)"
+    r"(?im)^[ \t]*(?:naturalidade|proced[eê]ncia)[ \t]*:[ \t]*(?P<value>(?!\[)[^\n\r]+)"
 )
 
 
@@ -64,6 +65,8 @@ def _find_labeled_values(
             continue
         start, end = match.span(group_name)
         value = text[start:end]
+        if not value.strip():
+            continue
         if value.strip().startswith("["):
             continue
         findings.append(

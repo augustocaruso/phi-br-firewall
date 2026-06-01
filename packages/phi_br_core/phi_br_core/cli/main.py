@@ -16,7 +16,8 @@ from phi_br_core.audit import audit_text
 from phi_br_core.bench import run_benchmark
 from phi_br_core.core import scrub_text
 from phi_br_core.mapping import PlaceholderIndex
-from phi_br_core.policy import PhiPolicy
+from phi_br_core.policy import NlpPolicy, PhiPolicy
+from phi_br_core.recognizers.nlp_adapter import nlp_model_available
 from phi_br_core.sessions import SessionStore
 
 app = typer.Typer(no_args_is_help=True)
@@ -43,6 +44,7 @@ CUSTOM_RECOGNIZERS = (
     "BR_FAMILY_MEMBER_NAME",
     "BR_HEALTHCARE_PROFESSIONAL_NAME",
 )
+OPTIONAL_NLP_RECOGNIZERS = ("BR_PERSON_NAME",)
 
 
 @app.callback()
@@ -61,13 +63,20 @@ def check() -> None:
     probe_path = base_dir / ".check-write"
     probe_path.write_text("ok", encoding="utf-8")
     probe_path.unlink(missing_ok=True)
+    nlp_status = _nlp_status(policy)
+    if policy.nlp.enabled and not nlp_status["available"]:
+        _echo_json({"ok": False, "reason": "nlp_model_unavailable", "nlp": nlp_status})
+        raise typer.Exit(code=1)
 
-    registry = build_registry([policy.language, "en"])
+    registry = build_registry([policy.language, "en"], policy=policy)
     supported_entities = set(registry.get_supported_entities())
-    custom_recognizers = sorted(
-        entity for entity in CUSTOM_RECOGNIZERS if entity in supported_entities
+    expected_recognizers = CUSTOM_RECOGNIZERS + (
+        OPTIONAL_NLP_RECOGNIZERS if policy.nlp.enabled else ()
     )
-    missing_recognizers = sorted(set(CUSTOM_RECOGNIZERS) - set(custom_recognizers))
+    custom_recognizers = sorted(
+        entity for entity in expected_recognizers if entity in supported_entities
+    )
+    missing_recognizers = sorted(set(expected_recognizers) - set(custom_recognizers))
     if missing_recognizers:
         raise typer.Exit(code=1)
 
@@ -89,6 +98,7 @@ def check() -> None:
             "presidio_analyzer": True,
             "presidio_anonymizer": True,
             "custom_recognizers": custom_recognizers,
+            "nlp": nlp_status,
             "scrub": True,
             "audit": True,
             "base_dir_writable": True,
@@ -114,14 +124,7 @@ def redact() -> None:
     source_text = clipboard.read_clipboard()
     result = scrub_text(source_text, policy)
     if not result.ok:
-        _echo_json(
-            {
-                "ok": False,
-                "action": "clipboard_redact_failed",
-                "printed_phi": False,
-                "reason": "audit_failed",
-            }
-        )
+        _echo_json(_scrub_failure_payload("clipboard_redact_failed", result))
         raise typer.Exit(code=1)
     clipboard.write_clipboard(result.scrubbed_text)
     _echo_json(
@@ -153,7 +156,7 @@ def scrub_stdin(
         raise typer.Exit(code=1) from error
 
     if not result.ok:
-        _echo_json({"ok": False, "reason": "audit_failed"})
+        _echo_json(_scrub_failure_payload("scrub_failed", result))
         raise typer.Exit(code=1)
 
     _echo_json(
@@ -297,7 +300,55 @@ def _policy() -> PhiPolicy:
     base_dir = os.environ.get("PHI_BASE_DIR")
     if base_dir:
         policy.mapping.base_dir = base_dir
+    nlp_updates: dict[str, object] = {}
+    nlp_enabled = os.environ.get("PHI_NLP_ENABLED", os.environ.get("PHI_NLP"))
+    if nlp_enabled is not None:
+        nlp_updates["enabled"] = _truthy(nlp_enabled)
+    nlp_model = os.environ.get("PHI_NLP_MODEL")
+    if nlp_model:
+        nlp_updates["model"] = nlp_model
+    nlp_min_score = os.environ.get("PHI_NLP_MIN_SCORE")
+    if nlp_min_score:
+        nlp_updates["min_score"] = float(nlp_min_score)
+    if nlp_updates:
+        policy.nlp = NlpPolicy(**(policy.nlp.model_dump() | nlp_updates))
+    if nlp_enabled is None:
+        policy.nlp = NlpPolicy(
+            **(policy.nlp.model_dump() | {"enabled": nlp_model_available(policy.nlp)})
+        )
     return policy
+
+
+def _truthy(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _nlp_status(policy: PhiPolicy) -> dict[str, object]:
+    return {
+        "available": nlp_model_available(policy.nlp),
+        "enabled": policy.nlp.enabled,
+        "model": policy.nlp.model,
+        "provider": policy.nlp.provider,
+    }
+
+
+def _scrub_failure_payload(action: str, result: Any) -> dict[str, object]:
+    residual_findings = getattr(getattr(result, "audit", None), "residual_findings", [])
+    residual_entity_types = sorted(
+        {
+            getattr(finding, "entity_type", "")
+            for finding in residual_findings
+            if getattr(finding, "entity_type", "")
+        }
+    )
+    return {
+        "ok": False,
+        "action": action,
+        "printed_phi": False,
+        "reason": "audit_failed",
+        "residual_count": len(residual_findings),
+        "residual_entity_types": residual_entity_types,
+    }
 
 
 def _purge_expired(policy: PhiPolicy) -> list[str]:

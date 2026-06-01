@@ -12,8 +12,13 @@ _EMAIL_PATTERN = re.compile(
     r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
 )
 _LABELED_IDENTIFIER_RE = re.compile(
-    r"\b(?:n[ºo.]?\s*)?(?:SES|protocolo|senha)\s*[:#-]?\s*(?P<value>[A-Z]{0,4}\d{4,12})\b",
+    r"\b(?:n[ºo.]?\s*)?(?:SES|ID|protocolo|senha)\s*[:#-]?\s*(?P<value>[A-Z]{0,4}\d{4,12})\b",
     flags=re.IGNORECASE,
+)
+_SYSTEM_IDENTIFIER_RE = re.compile(
+    r"\b(?:via|sistema|plataforma|no\s+sistema|na\s+plataforma|"
+    r"pelo\s+sistema|pela\s+plataforma)\s+"
+    r"(?P<value>[Ss][Ii][Ss][A-Za-z0-9_-]{2,30})\b",
 )
 
 
@@ -59,6 +64,7 @@ class ContextualIdentifierRecognizer(PatternRecognizer):
         ]
         if BR_CONTEXTUAL_IDENTIFIER in set(entities):
             filtered.extend(self._labeled_identifier_results(text))
+            filtered.extend(self._system_identifier_results(text))
         return filtered
 
     @staticmethod
@@ -71,6 +77,18 @@ class ContextualIdentifierRecognizer(PatternRecognizer):
                 score=0.86,
             )
             for match in _LABELED_IDENTIFIER_RE.finditer(text)
+        ]
+
+    @staticmethod
+    def _system_identifier_results(text: str) -> list[RecognizerResult]:
+        return [
+            RecognizerResult(
+                entity_type=BR_CONTEXTUAL_IDENTIFIER,
+                start=match.start("value"),
+                end=match.end("value"),
+                score=0.78,
+            )
+            for match in _SYSTEM_IDENTIFIER_RE.finditer(text)
         ]
 
     @staticmethod

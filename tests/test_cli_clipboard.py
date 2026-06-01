@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from phi_br_core.cli.main import app
 from phi_br_core.mapping import PlaceholderIndex
-from phi_br_core.models import PhiAuditResult, PhiScrubResult, PhiScrubSummary
+from phi_br_core.models import PhiAuditResult, PhiFinding, PhiScrubResult, PhiScrubSummary
 from typer.testing import CliRunner
 
 runner = CliRunner()
@@ -113,9 +113,54 @@ def test_check_reports_health_without_persisting_mapping(monkeypatch, tmp_path: 
     assert payload["ok"] is True
     assert payload["presidio_analyzer"] is True
     assert "BR_CPF" in payload["custom_recognizers"]
+    assert payload["nlp"] == {
+        "available": True,
+        "enabled": True,
+        "model": "pt_core_news_md",
+        "provider": "spacy",
+    }
     assert list(tmp_path.rglob("mapping.json")) == []
     assert list(tmp_path.rglob("metadata.json")) == []
     assert not (tmp_path / "index.json").exists()
+
+
+def test_check_allows_explicit_nlp_disable(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+    monkeypatch.setenv("PHI_NLP", "0")
+
+    result = runner.invoke(app, ["check"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["nlp"] == {
+        "available": True,
+        "enabled": False,
+        "model": "pt_core_news_md",
+        "provider": "spacy",
+    }
+
+
+def test_check_fails_when_nlp_is_enabled_but_model_is_missing(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("PHI_BASE_DIR", str(tmp_path))
+    monkeypatch.setenv("PHI_NLP", "1")
+    monkeypatch.setenv("PHI_NLP_MODEL", "phi_missing_spacy_model")
+
+    result = runner.invoke(app, ["check"])
+
+    assert result.exit_code != 0
+    payload = json.loads(result.stdout)
+    assert payload == {
+        "ok": False,
+        "reason": "nlp_model_unavailable",
+        "nlp": {
+            "available": False,
+            "enabled": True,
+            "model": "phi_missing_spacy_model",
+            "provider": "spacy",
+        },
+    }
 
 
 def test_purge_deletes_expired_sessions_and_cleans_index(
@@ -223,7 +268,18 @@ def test_redact_does_not_write_clipboard_when_scrub_fails(
             scrubbed_text="Paciente Joao da Silva.",
             mapping_path="",
             session_id="",
-            audit=PhiAuditResult(safe=False, residual_findings=[]),
+            audit=PhiAuditResult(
+                safe=False,
+                residual_findings=[
+                    PhiFinding(
+                        entity_type="BR_PERSON_NAME",
+                        text="",
+                        start=9,
+                        end=23,
+                        score=0.70,
+                    )
+                ],
+            ),
             summary=PhiScrubSummary(entities_replaced=0, entity_types=[]),
         )
 
@@ -239,6 +295,10 @@ def test_redact_does_not_write_clipboard_when_scrub_fails(
 
     assert result.exit_code != 0
     assert clipboard["text"] == "Paciente Joao da Silva."
+    payload = json.loads(result.stdout)
+    assert payload["residual_count"] == 1
+    assert payload["residual_entity_types"] == ["BR_PERSON_NAME"]
+    assert "Joao da Silva" not in result.stdout
 
 
 def test_scrub_stdin_outputs_safe_json_without_printing_phi(

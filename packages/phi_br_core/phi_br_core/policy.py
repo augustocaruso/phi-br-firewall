@@ -25,6 +25,13 @@ class AgePolicy(PolicyModel):
     strategy: Literal["placeholder", "age_band", "preserve"] = "age_band"
 
 
+class NlpPolicy(PolicyModel):
+    enabled: bool = False
+    provider: Literal["spacy"] = "spacy"
+    model: str = "pt_core_news_md"
+    min_score: float = Field(default=0.70, ge=0, le=1)
+
+
 class SessionPolicy(PolicyModel):
     ttl_hours: int = Field(default=24, gt=0)
     purge_expired_on_start: bool = True
@@ -41,4 +48,5 @@ class PhiPolicy(PolicyModel):
     mapping: MappingPolicy = Field(default_factory=MappingPolicy)
     dates: DatePolicy = Field(default_factory=DatePolicy)
     ages: AgePolicy = Field(default_factory=AgePolicy)
+    nlp: NlpPolicy = Field(default_factory=NlpPolicy)
     sessions: SessionPolicy = Field(default_factory=SessionPolicy)

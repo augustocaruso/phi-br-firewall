@@ -28,6 +28,16 @@ def test_parse_placeholder_with_metadata_and_render_options() -> None:
     )
 
 
+def test_parse_placeholder_tolerates_legacy_public_metadata_with_spaces() -> None:
+    placeholder = parse_placeholder(
+        "[IDADE_059: kind=age; band=adulto jovem; src=exact|case=title]"
+    )
+
+    assert placeholder.key == "IDADE_059"
+    assert placeholder.public_meta == {}
+    assert placeholder.render_options == {"case": "title"}
+
+
 def test_serialize_placeholder_omits_empty_sections() -> None:
     assert serialize_placeholder(Placeholder(key="PACIENTE_001")) == "[PACIENTE_001]"
     assert (

@@ -21,6 +21,7 @@ from phi_br_core.policy import (
     AgePolicy,
     DatePolicy,
     MappingPolicy,
+    NlpPolicy,
     PhiPolicy,
     SessionPolicy,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "audit_text",
     "DatePolicy",
     "MappingPolicy",
+    "NlpPolicy",
     "PhiAuditResult",
     "PhiFinding",
     "PhiPolicy",

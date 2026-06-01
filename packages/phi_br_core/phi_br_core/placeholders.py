@@ -64,9 +64,14 @@ def parse_placeholder(value: str) -> Placeholder:
     if not _KEY_RE.fullmatch(key):
         raise ValueError("invalid placeholder key")
 
+    try:
+        public_meta = parse_tag_list(meta_text) if meta_separator else {}
+    except ValueError:
+        public_meta = {}
+
     return Placeholder(
         key=key,
-        public_meta=parse_tag_list(meta_text) if meta_separator else {},
+        public_meta=public_meta,
         render_options=parse_tag_list(render_text) if separator else {},
     )
 

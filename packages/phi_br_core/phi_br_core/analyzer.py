@@ -28,6 +28,7 @@ from phi_br_core.recognizers.dates_br import DateBrRecognizer
 from phi_br_core.recognizers.email_br import EmailBrRecognizer
 from phi_br_core.recognizers.institutions import InstitutionRecognizer
 from phi_br_core.recognizers.names_context import ClinicalNameContextRecognizer
+from phi_br_core.recognizers.nlp_adapter import NlpEntityRecognizer
 from phi_br_core.recognizers.phone_br import PhoneBrRecognizer
 from phi_br_core.recognizers.rg import RgRecognizer
 
@@ -36,6 +37,10 @@ from phi_br_core.recognizers.rg import RgRecognizer
 class _AnalyzerCacheKey:
     languages: tuple[str, ...]
     min_score: float
+    nlp_enabled: bool
+    nlp_provider: str
+    nlp_model: str
+    nlp_min_score: float
 
 
 _ANALYZER_CACHE: dict[_AnalyzerCacheKey, AnalyzerEngine] = {}
@@ -144,7 +149,10 @@ def clear_analyzer_cache() -> None:
     _ANALYZER_CACHE.clear()
 
 
-def build_registry(languages: list[str] | None = None) -> RecognizerRegistry:
+def build_registry(
+    languages: list[str] | None = None,
+    policy: PhiPolicy | None = None,
+) -> RecognizerRegistry:
     supported_languages = languages if languages is not None else ["pt", "en"]
     registry = RecognizerRegistry(supported_languages=supported_languages)
     try:
@@ -166,6 +174,8 @@ def build_registry(languages: list[str] | None = None) -> RecognizerRegistry:
     registry.add_recognizer(AgeBrRecognizer())
     registry.add_recognizer(InstitutionRecognizer())
     registry.add_recognizer(ClinicalNameContextRecognizer())
+    if policy is not None and policy.nlp.enabled:
+        registry.add_recognizer(NlpEntityRecognizer(policy.nlp))
     _remove_conflicting_predefined_recognizers(registry)
     return registry
 
@@ -182,12 +192,19 @@ def _remove_conflicting_predefined_recognizers(registry: RecognizerRegistry) -> 
 
 def build_analyzer(policy: PhiPolicy) -> AnalyzerEngine:
     languages = _languages_for(policy)
-    cache_key = _AnalyzerCacheKey(languages=tuple(languages), min_score=policy.min_score)
+    cache_key = _AnalyzerCacheKey(
+        languages=tuple(languages),
+        min_score=policy.min_score,
+        nlp_enabled=policy.nlp.enabled,
+        nlp_provider=policy.nlp.provider,
+        nlp_model=policy.nlp.model,
+        nlp_min_score=policy.nlp.min_score,
+    )
     cached = _ANALYZER_CACHE.get(cache_key)
     if cached is not None:
         return cached
 
-    registry = build_registry(languages)
+    registry = build_registry(languages, policy=policy)
     analyzer = AnalyzerEngine(
         registry=registry,
         nlp_engine=_SimpleNlpEngine(languages),

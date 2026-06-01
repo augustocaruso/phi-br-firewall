@@ -4,11 +4,21 @@ from phi_br_core.entities import (
     BR_CRM,
     BR_DATE,
     BR_ENTITY_TYPES,
+    BR_FAMILY_MEMBER_NAME,
+    BR_PATIENT_NAME,
+    BR_PERSON_NAME,
     ENTITY_SPECIFICITY,
     ENTITY_SPECIFICITY_ORDER,
     ENTITY_TO_PLACEHOLDER_PREFIX,
 )
-from phi_br_core.policy import AgePolicy, DatePolicy, MappingPolicy, PhiPolicy, SessionPolicy
+from phi_br_core.policy import (
+    AgePolicy,
+    DatePolicy,
+    MappingPolicy,
+    NlpPolicy,
+    PhiPolicy,
+    SessionPolicy,
+)
 from pydantic import BaseModel, ValidationError
 
 
@@ -23,21 +33,28 @@ def test_policy_defaults_are_safe() -> None:
     assert policy.mapping.base_dir == ".tmp/phi"
     assert policy.dates.strategy == "preserve_relative"
     assert policy.ages.strategy == "age_band"
+    assert policy.nlp.enabled is False
+    assert policy.nlp.provider == "spacy"
+    assert policy.nlp.model == "pt_core_news_md"
     assert policy.sessions.ttl_hours == 24
     assert policy.sessions.purge_expired_on_start is True
 
 
 def test_entity_constants_define_placeholders_and_specificity() -> None:
     assert BR_CPF in BR_ENTITY_TYPES
+    assert BR_PERSON_NAME in BR_ENTITY_TYPES
     assert ENTITY_TO_PLACEHOLDER_PREFIX[BR_CPF] == "CPF"
+    assert ENTITY_TO_PLACEHOLDER_PREFIX[BR_PERSON_NAME] == "PESSOA"
     assert ENTITY_TO_PLACEHOLDER_PREFIX["BR_PATIENT_NAME"] == "PACIENTE"
     assert BR_CRM in ENTITY_SPECIFICITY_ORDER
     assert ENTITY_SPECIFICITY[BR_CRM] > ENTITY_SPECIFICITY[BR_DATE]
+    assert ENTITY_SPECIFICITY[BR_PATIENT_NAME] > ENTITY_SPECIFICITY[BR_PERSON_NAME]
+    assert ENTITY_SPECIFICITY[BR_FAMILY_MEMBER_NAME] > ENTITY_SPECIFICITY[BR_PERSON_NAME]
 
 
 @pytest.mark.parametrize(
     "policy_model",
-    [MappingPolicy, DatePolicy, AgePolicy, SessionPolicy, PhiPolicy],
+    [MappingPolicy, DatePolicy, AgePolicy, NlpPolicy, SessionPolicy, PhiPolicy],
 )
 def test_policy_models_reject_typo_fields(policy_model: type[BaseModel]) -> None:
     with pytest.raises(ValidationError):
@@ -58,3 +75,12 @@ def test_phi_policy_rejects_scores_outside_zero_to_one(
 def test_session_policy_rejects_non_positive_limits(field_name: str, value: int) -> None:
     with pytest.raises(ValidationError):
         SessionPolicy(**{field_name: value})
+
+
+@pytest.mark.parametrize("field_name", ["min_score"])
+@pytest.mark.parametrize("value", [-0.01, 1.01])
+def test_nlp_policy_rejects_scores_outside_zero_to_one(
+    field_name: str, value: float
+) -> None:
+    with pytest.raises(ValidationError):
+        NlpPolicy(**{field_name: value})

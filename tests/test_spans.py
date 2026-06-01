@@ -19,6 +19,17 @@ def test_resolve_overlaps_keeps_more_specific_entity() -> None:
     assert [item.entity_type for item in resolved] == ["BR_CRM"]
 
 
+def test_resolve_overlaps_keeps_more_specific_entity_for_equal_span() -> None:
+    findings = [
+        finding("BR_PERSON_NAME", "Joao da Silva", 9, 22, 0.70),
+        finding("BR_PATIENT_NAME", "Joao da Silva", 9, 22, 0.75),
+    ]
+
+    resolved = resolve_overlaps(findings)
+
+    assert [item.entity_type for item in resolved] == ["BR_PATIENT_NAME"]
+
+
 def test_resolve_overlaps_keeps_containing_phi_span_to_avoid_partial_redaction() -> None:
     findings = [
         finding("BR_ADDRESS", "Rua A, 123, CEP 70000-000", 9, 34, 0.70),

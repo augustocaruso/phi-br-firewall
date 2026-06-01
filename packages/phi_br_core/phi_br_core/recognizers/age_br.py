@@ -16,7 +16,7 @@ _AGE_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 _DURATION_PREFIX_PATTERN = re.compile(
-    r"(?:^|\W)(?:h[áa](?:\s+pelo\s+menos)?|faz|desde|para|por|durante|em|ap[oó]s)\s+$",
+    r"(?:^|\W)(?:h[áa](?:\s+(?:pelo\s+menos|aproximadamente))?|faz|desde|para|por|durante|em|ap[oó]s)\s+$",
     flags=re.IGNORECASE,
 )
 

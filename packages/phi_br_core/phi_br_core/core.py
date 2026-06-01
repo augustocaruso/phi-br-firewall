@@ -43,11 +43,31 @@ def scrub_text(text: str, policy: PhiPolicy) -> PhiScrubResult:
     if not policy.mapping.persist:
         result = _scrub_without_persistence(text, scan.findings, policy)
         audit = audit_text(result.scrubbed_text, policy)
+        if not audit.safe:
+            repaired = _scrub_without_persistence(
+                result.scrubbed_text,
+                audit.residual_findings,
+                policy,
+            )
+            repaired = _with_combined_summary(result, repaired)
+            audit = audit_text(repaired.scrubbed_text, policy)
+            return _apply_audit(repaired, audit)
         return _apply_audit(result, audit)
 
     anonymizer = StablePlaceholderAnonymizer(base_dir=policy.mapping.base_dir)
     result = anonymizer.scrub(text, scan.findings, source="core", policy=policy)
     audit = audit_text(result.scrubbed_text, policy)
+    if not audit.safe:
+        repaired = anonymizer.scrub_existing_session(
+            text=result.scrubbed_text,
+            findings=audit.residual_findings,
+            session_id=result.session_id,
+            mapping_path=result.mapping_path,
+            policy=policy,
+        )
+        repaired = _with_combined_summary(result, repaired)
+        audit = audit_text(repaired.scrubbed_text, policy)
+        return _apply_audit(repaired, audit)
     return _apply_audit(result, audit)
 
 
@@ -74,6 +94,24 @@ def _without_residual_text(audit: PhiAuditResult) -> PhiAuditResult:
             "residual_findings": [
                 finding.model_copy(update={"text": ""}) for finding in audit.residual_findings
             ]
+        }
+    )
+
+
+def _with_combined_summary(
+    initial: PhiScrubResult, repaired: PhiScrubResult
+) -> PhiScrubResult:
+    return repaired.model_copy(
+        update={
+            "summary": PhiScrubSummary(
+                entities_replaced=(
+                    initial.summary.entities_replaced
+                    + repaired.summary.entities_replaced
+                ),
+                entity_types=sorted(
+                    set(initial.summary.entity_types) | set(repaired.summary.entity_types)
+                ),
+            )
         }
     )
 

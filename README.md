@@ -71,7 +71,7 @@ Paciente Joao da Silva, CPF 935.411.347-80.
 becomes:
 
 ```text
-Paciente [PACIENTE_001: kind=name; role=patient; case=title; form=full], [CPF_001].
+Paciente [PACIENTE_001:full/title], [CPF_001].
 ```
 
 The model sees the placeholder text. The mapping stays local.
@@ -84,14 +84,16 @@ write useful clinical prose without seeing the original private value.
 Examples:
 
 ```text
-[PACIENTE_001: kind=name; role=patient; case=upper; form=full]
-[DATA_010: kind=date; role=event; rel=T-19m; gran=month; src_fmt=month/yyyy]
-[IDADE_007: kind=age; band=escolar; src=exact]
+[PACIENTE_001:full/upper]
+[FAMILIAR_001:first/title]
+[DATA_010:T-19m/month-yyyy]
+[DATA_011:birth/dd-mm-yyyy]
+[IDADE_007:school-age]
 ```
 
-The part after `:` is public metadata. It may describe category, role, original
-case, date granularity, source format, relative chronology, or age band. It must
-not contain the raw name, date, address, document number, or exact age.
+The part after `:` is a compact public label. It may describe name shape/case,
+relative chronology, original date format, or age band. It must not contain the
+raw name, date, address, document number, or exact age.
 
 When the model wants local restore to format the original private value, it can
 return render options after `|`:
@@ -175,7 +177,7 @@ The response contains redacted text only:
 {
   "ok": true,
   "action": "redact",
-  "redacted_text": "Paciente [PACIENTE_001: kind=name; role=patient; case=title; form=full], [CPF_001].",
+  "redacted_text": "Paciente [PACIENTE_001:full/title], [CPF_001].",
   "session_id": "phi-...",
   "summary": {
     "entities_replaced": 2,
@@ -233,11 +235,55 @@ relevant project folder to remove local sessions.
 Multiple active sessions can coexist. Phi resolves ownership from the
 placeholder numbers in the text, so users do not need to pass session IDs.
 
+## NLP Adapter
+
+Phi is still Presidio-first for the execution contract, but the CLI is NLP-first
+when the configured Portuguese spaCy model is installed. Regex/context
+recognizers remain in charge for deterministic identifiers such as CPF, CNS,
+CRM, dates, phones, and clinical IDs.
+
+NLP findings are conservative fallbacks:
+
+- `PER`/`PERSON` becomes `[PESSOA_001]`;
+- `ORG` becomes `[INSTITUICAO_001]`;
+- `LOC`/`GPE` becomes `[ENDERECO_001]`.
+
+Context-specific recognizers still win over generic NLP. For example, a name
+found by the family recognizer remains `[FAMILIAR_001]` instead of becoming a
+generic person placeholder.
+
+Development checkout:
+
+```bash
+uv sync --extra nlp
+uv run python -m spacy download pt_core_news_md
+uv run phi check
+```
+
+Runtime flags:
+
+```bash
+PHI_INSTALL_NLP=0
+PHI_NLP=0
+PHI_NLP_MODEL=pt_core_news_md
+PHI_NLP_MIN_SCORE=0.70
+```
+
+The public installer installs spaCy and `pt_core_news_md` by default. Use
+`PHI_INSTALL_NLP=0` only when you intentionally want the lighter regex/context
+fallback install. `PHI_NLP=0` disables NLP at runtime. If `PHI_NLP=1` is set and
+the configured model is unavailable, `phi check` fails instead of silently
+pretending NLP is active.
+
+`pt_core_news_md` is the default because it keeps the local firewall practical
+to install while preserving most of the Portuguese NER accuracy of
+`pt_core_news_lg`. Use `PHI_NLP_MODEL=pt_core_news_lg` only when the extra model
+size and startup cost are acceptable.
+
 ## Current Limitations
 
 - Beta quality. Expect false negatives and false positives.
-- MVP recognizers are Presidio-first with regex/context heuristics, not a full
-  Portuguese clinical NLP pipeline.
+- The NLP adapter is still experimental and requires human review.
 - Local mappings are not encrypted yet.
 - Redaction does not remove every clinically identifying clue.
 - Restore is local and placeholder-based; it does not rewrite free prose that no

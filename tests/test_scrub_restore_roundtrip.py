@@ -26,9 +26,9 @@ def test_stable_anonymizer_reuses_placeholder_for_same_value(tmp_path) -> None:
     )
 
     assert result.scrubbed_text == (
-        "Paciente [PACIENTE_001: kind=name; role=patient; case=title; form=full], "
+        "Paciente [PACIENTE_001:full/title], "
         "CPF [CPF_001]. Paciente "
-        "[PACIENTE_001: kind=name; role=patient; case=title; form=full] retornou."
+        "[PACIENTE_001:full/title] retornou."
     )
     assert anonymizer.restore(result.scrubbed_text, result.mapping_path) == (
         "Paciente Joao da Silva, CPF 935.411.347-80. Paciente Joao da Silva retornou."
@@ -46,8 +46,8 @@ def test_stable_anonymizer_increments_same_category_values(tmp_path) -> None:
     result = anonymizer.scrub(text, findings, source="test")
 
     assert result.scrubbed_text == (
-        "Paciente [PACIENTE_001: kind=name; role=patient; case=title; form=single]. "
-        "Paciente [PACIENTE_002: kind=name; role=patient; case=title; form=single]."
+        "Paciente [PACIENTE_001:first/title]. "
+        "Paciente [PACIENTE_002:first/title]."
     )
 
 
@@ -66,10 +66,10 @@ def test_stable_anonymizer_uses_global_placeholder_numbers_across_sessions(tmp_p
     )
 
     assert first.scrubbed_text == (
-        "Paciente [PACIENTE_001: kind=name; role=patient; case=title; form=single]."
+        "Paciente [PACIENTE_001:first/title]."
     )
     assert second.scrubbed_text == (
-        "Paciente [PACIENTE_002: kind=name; role=patient; case=title; form=single]."
+        "Paciente [PACIENTE_002:first/title]."
     )
     assert anonymizer.index.resolve(["PACIENTE_001", "PACIENTE_002"]) == {
         "PACIENTE_001": first.session_id,
@@ -101,7 +101,7 @@ def test_stable_anonymizer_writes_mapping_and_index(tmp_path) -> None:
                     "kind": "name",
                     "role": "patient",
                     "case": "title",
-                    "form": "single",
+                    "form": "first",
                 },
             },
             "CPF_001": {"value": "935.411.347-80", "entity_type": "BR_CPF"},
@@ -132,7 +132,7 @@ def test_name_placeholder_exposes_case_metadata_and_restore_can_render_title_cas
     mapping = json.loads(Path(result.mapping_path).read_text(encoding="utf-8"))
 
     assert result.scrubbed_text == (
-        "Paciente [PACIENTE_001: kind=name; role=patient; case=upper; form=full] retornou."
+        "Paciente [PACIENTE_001:full/upper] retornou."
     )
     assert mapping["items"]["PACIENTE_001"]["public_meta"] == {
         "case": "upper",
@@ -159,10 +159,10 @@ def test_date_placeholder_exposes_format_metadata_and_restore_can_render_long_da
     result = anonymizer.scrub(text, findings, source="test")
     mapping = json.loads(Path(result.mapping_path).read_text(encoding="utf-8"))
 
-    assert "[DATA_001: kind=date; role=event; rel=T0; gran=day; src_fmt=dd/mm/yyyy]" in (
+    assert "[DATA_001:T0/dd-mm-yyyy]" in (
         result.scrubbed_text
     )
-    assert "[DATA_002: kind=date; role=event; rel=T-14m; gran=month; src_fmt=month/yyyy]" in (
+    assert "[DATA_002:T-14m/month-yyyy]" in (
         result.scrubbed_text
     )
     assert mapping["items"]["DATA_001"]["private_meta"] == {

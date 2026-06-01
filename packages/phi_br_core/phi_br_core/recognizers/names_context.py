@@ -20,6 +20,15 @@ _PROFESSIONAL_TITLE_PREFIX = r"(?:(?:prof\.?|professor(?:a)?)\s+)?"
 _PROFESSIONAL_TITLE = (
     r"(?:dr\.?|dra\.?|drª\.?|drº\.?|dr\(a\)\.?|doutor(?:a)?|m[eé]dic[oa])"
 )
+_RESIDENT_TRAINING_ROLE = (
+    r"(?i:R[1-6](?:\s+(?:psiquiatria|medicina|cl[ií]nica|pediatria|dermatologia))?)"
+)
+_STUDENT_TRAINING_ROLE = (
+    r"(?i:(?:intern[oa]|estudante\s+de\s+medicina|"
+    r"acad[eê]mic[oa](?:\s+de\s+medicina)?)"
+    r"(?:\s+(?:do|da|de))?\s*\d{1,2}[ºoa]?\s*(?:semestre|ano)"
+    r"(?:\s+de\s+curso)?)"
+)
 _MEDICATION_TERMS = {
     "aripiprazol",
     "buspirona",
@@ -72,6 +81,19 @@ _FIELD_LABEL_TERMS = {
     "telefone",
     "tel",
 }
+_NON_NAME_START_TERMS = {
+    "descartar",
+    "em",
+    "encaminhamento",
+    "foi",
+    "indico",
+    "internacao",
+    "internação",
+    "pela",
+    "pelo",
+    "solicita",
+    "tem",
+}
 _WORD_PATTERN = re.compile(r"\w+", flags=re.UNICODE)
 _NAME_PATTERN = re.compile(_NAME)
 
@@ -103,8 +125,8 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
             rf"\b(?i:paciente|usu[aá]rio|cliente){_LABEL_SEPARATOR}(?P<name>{_NAME})\b",
         )
         self._patient_name_label_pattern = re.compile(
-            rf"(?im)^\s*(?i:nome(?:\s+(?:completo|social|do\s+paciente))?)"
-            rf"\s*:\s*(?P<name>{_NAME})\b",
+            rf"(?im)^[ \t]*(?i:nome(?:\s+(?:completo|social|do\s+paciente))?)"
+            rf"[ \t]*:[ \t]*(?P<name>{_NAME})\b",
         )
         self._family_label_pattern = re.compile(
             rf"\b(?i:acompanhante|respons[aá]vel|contatos?|m[aã]e|pai|"
@@ -115,7 +137,7 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
             rf"\b(?P<name>{_NAME})\s*\((?i:m[aã]e|pai|irm[aã]o|filh[ao]|av[oóô])\)",
         )
         self._family_list_pattern = re.compile(
-            r"(?im)^\s*(?:filia[cç][aã]o|irm[aã]os?|contatos?)\s*:\s*"
+            r"(?im)^[ \t]*(?:filia[cç][aã]o|irm[aã]os?|contatos?)[ \t]*:[ \t]*"
             r"(?P<value>[^\n\r]+)"
         )
         self._professional_pattern = re.compile(
@@ -127,7 +149,10 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
             r"\((?i:intern[oa]|residente|staff|preceptor[ao]?|m[eé]dic[oa])[^)]*\))",
         )
         self._professional_training_role_pattern = re.compile(
-            rf"\b(?P<name>{_NAME})\s+R[1-6]\b\s+(?i:psiquiatria|medicina|cl[ií]nica)"
+            rf"\b(?P<name>{_NAME}\s+{_RESIDENT_TRAINING_ROLE})\b"
+        )
+        self._professional_student_training_pattern = re.compile(
+            rf"\b(?P<name>{_NAME}\s+{_STUDENT_TRAINING_ROLE})\b"
         )
 
     def load(self) -> None:
@@ -195,6 +220,14 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
                     0.74,
                 )
             )
+            results.extend(
+                self._results_for(
+                    text,
+                    self._professional_student_training_pattern,
+                    BR_HEALTHCARE_PROFESSIONAL_NAME,
+                    0.74,
+                )
+            )
         return results
 
     def _results_for(
@@ -208,6 +241,11 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
         for match in pattern.finditer(text):
             name = match.group("name")
             if self._contains_medication_term(name):
+                continue
+            if (
+                entity_type != BR_HEALTHCARE_PROFESSIONAL_NAME
+                and self._starts_with_non_name_term(name)
+            ):
                 continue
             span = self._trim_field_label_suffix(match)
             if span is None:
@@ -267,3 +305,8 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
     def _contains_medication_term(name: str) -> bool:
         words = {word.lower() for word in _WORD_PATTERN.findall(name)}
         return bool(words & _MEDICATION_TERMS)
+
+    @staticmethod
+    def _starts_with_non_name_term(name: str) -> bool:
+        first_word = next(iter(_WORD_PATTERN.findall(name)), "").lower()
+        return first_word in _NON_NAME_START_TERMS

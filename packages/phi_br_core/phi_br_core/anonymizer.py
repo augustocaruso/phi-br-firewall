@@ -34,10 +34,30 @@ class StablePlaceholderAnonymizer:
         policy: PhiPolicy | None = None,
     ) -> PhiScrubResult:
         session = self.sessions.create(source=source)
+        return self.scrub_existing_session(
+            text=text,
+            findings=findings,
+            session_id=session.session_id,
+            mapping_path=session.path / "mapping.json",
+            policy=policy,
+        )
+
+    def scrub_existing_session(
+        self,
+        text: str,
+        findings: list[PhiFinding],
+        session_id: str,
+        mapping_path: Path | str,
+        policy: PhiPolicy | None = None,
+    ) -> PhiScrubResult:
+        mapping_file = Path(mapping_path)
         accepted = resolve_overlaps(findings)
         renderer = ClinicalReplacementRenderer(text, accepted, policy or PhiPolicy())
-        by_value: dict[tuple[str, str], str] = {}
-        items: dict[str, dict[str, Any]] = {}
+        items = read_mapping_items(mapping_file) if mapping_file.exists() else {}
+        by_value = {
+            (str(item["entity_type"]), str(item["value"])): key
+            for key, item in items.items()
+        }
         replacements: list[tuple[PhiFinding, str]] = []
         scrubbed_text = text
 
@@ -58,7 +78,7 @@ class StablePlaceholderAnonymizer:
                 if rendered.private_meta:
                     item["private_meta"] = rendered.private_meta
                 items[placeholder_key] = item
-                self.index.assign(placeholder_key, session.session_id)
+                self.index.assign(placeholder_key, session_id)
             if rendered is None:
                 rendered = renderer.render(placeholder_key, finding)
             replacements.append((finding, rendered.text))
@@ -72,11 +92,10 @@ class StablePlaceholderAnonymizer:
                 + scrubbed_text[finding.end :]
             )
 
-        mapping_path = session.path / "mapping.json"
         write_json_atomic(
-            mapping_path,
+            mapping_file,
             {
-                "session_id": session.session_id,
+                "session_id": session_id,
                 "items": items,
             },
         )
@@ -84,8 +103,8 @@ class StablePlaceholderAnonymizer:
             ok=True,
             action="scrub",
             scrubbed_text=scrubbed_text,
-            mapping_path=str(mapping_path),
-            session_id=session.session_id,
+            mapping_path=str(mapping_file),
+            session_id=session_id,
             audit=PhiAuditResult(safe=True, residual_findings=[]),
             summary=PhiScrubSummary(
                 entities_replaced=len(accepted),

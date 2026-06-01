@@ -9,6 +9,8 @@ REPO_DIR="${SOURCE_DIR:-$INSTALL_ROOT/repo}"
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
 OPENCODE_PLUGIN_DIR="$OPENCODE_CONFIG_DIR/plugins"
 OPENCODE_WRAPPER="$OPENCODE_PLUGIN_DIR/phi-br-firewall.ts"
+INSTALL_NLP="${PHI_INSTALL_NLP:-1}"
+SPACY_PT_MODEL_PACKAGE="${PHI_SPACY_PT_MODEL_PACKAGE:-https://github.com/explosion/spacy-models/releases/download/pt_core_news_md-3.8.0/pt_core_news_md-3.8.0-py3-none-any.whl}"
 
 log() {
   printf 'phi install: %s\n' "$*"
@@ -72,8 +74,67 @@ checkout_repo() {
 }
 
 install_cli() {
-  log "installing phi CLI with uv"
-  uv tool install --force "$REPO_DIR"
+  if [ "$INSTALL_NLP" = "0" ]; then
+    log "installing phi CLI with uv"
+    uv tool install --force "$REPO_DIR"
+    return
+  fi
+
+  log "installing phi CLI with uv and spaCy"
+  uv tool install --force "${REPO_DIR}[nlp]"
+  install_spacy_model
+}
+
+phi_tool_python() {
+  local tool_dir
+  tool_dir="$(uv tool dir)/phi-br-presidio-firewall"
+
+  if [ -x "$tool_dir/bin/python" ]; then
+    printf '%s\n' "$tool_dir/bin/python"
+    return
+  fi
+  if [ -x "$tool_dir/Scripts/python.exe" ]; then
+    printf '%s\n' "$tool_dir/Scripts/python.exe"
+    return
+  fi
+
+  return 1
+}
+
+install_spacy_model() {
+  local python_bin
+  python_bin="$(phi_tool_python)" || die "phi tool Python was not found after install"
+
+  log "installing pt_core_news_md into the phi tool environment"
+  case "$SPACY_PT_MODEL_PACKAGE" in
+    http://*|https://*)
+      local temp_dir wheel_path
+      temp_dir="$(mktemp -d)"
+      wheel_path="$temp_dir/pt_core_news_md.whl"
+      if command -v curl >/dev/null 2>&1; then
+        if ! curl --retry 3 -fL "$SPACY_PT_MODEL_PACKAGE" -o "$wheel_path"; then
+          rm -rf "$temp_dir"
+          die "failed to download the spaCy Portuguese model"
+        fi
+      elif command -v wget >/dev/null 2>&1; then
+        if ! wget -O "$wheel_path" "$SPACY_PT_MODEL_PACKAGE"; then
+          rm -rf "$temp_dir"
+          die "failed to download the spaCy Portuguese model"
+        fi
+      else
+        rm -rf "$temp_dir"
+        die "install curl or wget to download the spaCy Portuguese model"
+      fi
+      if ! uv pip install --python "$python_bin" "$wheel_path"; then
+        rm -rf "$temp_dir"
+        die "failed to install the spaCy Portuguese model"
+      fi
+      rm -rf "$temp_dir"
+      ;;
+    *)
+      uv pip install --python "$python_bin" "$SPACY_PT_MODEL_PACKAGE"
+      ;;
+  esac
 }
 
 phi_bin() {
@@ -120,7 +181,11 @@ run_check() {
   binary="$(phi_bin)" || die "phi executable was not found after install"
 
   log "running phi check"
-  "$binary" check >/dev/null
+  if [ "$INSTALL_NLP" = "0" ]; then
+    "$binary" check >/dev/null
+  else
+    PHI_NLP=1 "$binary" check >/dev/null
+  fi
 }
 
 main() {

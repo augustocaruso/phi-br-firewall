@@ -37,6 +37,66 @@ _FIELD_LABEL_TERMS = {
 }
 _LABEL_SEPARATOR = r"\s*(?::|-)?\s+"
 _WORD_PATTERN = re.compile(r"\w+", flags=re.UNICODE)
+_TRAILING_DATE_FRAGMENT_RE = re.compile(
+    r"\s+(?:dia|em)\s+\d{1,2}$",
+    flags=re.IGNORECASE,
+)
+_INSTITUTION_ACRONYM_RE = re.compile(r"\b[A-Z]{3,8}(?:\s+DF)?\b")
+_INSTITUTION_ACRONYM_CONTEXT_RE = re.compile(
+    r"(?:ambulat[oó]rio|cl[ií]nica|equipe|hospital|internad[oa]\s+n[oa]|"
+    r"institui[cç][aã]o|proced[eê]ncia|psiquiatria|servi[cç]o|telemedicina|"
+    r"unidade|upa|ubs)\b",
+    flags=re.IGNORECASE,
+)
+_CLINICAL_ACRONYM_DENYLIST = {
+    "BEG",
+    "BI",
+    "BT",
+    "CPK",
+    "CR",
+    "CT",
+    "DA",
+    "DI",
+    "DN",
+    "DS",
+    "EAS",
+    "ECG",
+    "ECT",
+    "EEG",
+    "FAL",
+    "FC",
+    "GGT",
+    "GJ",
+    "Hb".upper(),
+    "HCV",
+    "HDA",
+    "HDL",
+    "HIV",
+    "HT",
+    "IMC",
+    "LAB",
+    "LDL",
+    "LME",
+    "MG",
+    "NA",
+    "NR",
+    "PA",
+    "PAD",
+    "PAS",
+    "PCR",
+    "QP",
+    "RNM",
+    "TC",
+    "TEC",
+    "TGO",
+    "TGP",
+    "TGL",
+    "TR",
+    "TSH",
+    "VCM",
+    "VHS",
+    "VO",
+}
 
 
 class InstitutionRecognizer(PatternRecognizer):
@@ -51,13 +111,14 @@ class InstitutionRecognizer(PatternRecognizer):
                         r"Unidade\s+B[aá]sica\s+de\s+Sa[uú]de|"
                         rf"Laborat[oó]rio){_LABEL_SEPARATOR}[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ]"
                         r"[\wÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇáàâãéèêíìîóòôõúùûç .'-]{2,60}"
+                        r"(?:\s*\([A-Z]{2,8}\))?"
                     ),
                     score=0.7,
                 ),
                 Pattern(
                     name="healthcare_institution_acronym",
-                    regex=r"\b(?:HUB|HRAN|HRT|HMIB|HCB|ICDF)\b",
-                    score=0.72,
+                    regex=r"(?!)",
+                    score=0.0,
                 )
             ],
             context=[
@@ -83,7 +144,10 @@ class InstitutionRecognizer(PatternRecognizer):
         regex_flags: int | None = None,
     ) -> list[RecognizerResult]:
         results = super().analyze(text, entities, nlp_artifacts, regex_flags)
-        return [self._trim_result(text, result) for result in results]
+        trimmed = [self._trim_result(text, result) for result in results]
+        if BR_INSTITUTION in set(entities):
+            trimmed.extend(self._institution_acronym_results(text))
+        return trimmed
 
     @staticmethod
     def _trim_result(text: str, result: RecognizerResult) -> RecognizerResult:
@@ -97,6 +161,11 @@ class InstitutionRecognizer(PatternRecognizer):
             end = result.start + words[index - 1].end()
             break
 
+        value = text[result.start : end]
+        date_fragment = _TRAILING_DATE_FRAGMENT_RE.search(value)
+        if date_fragment is not None and text[end : end + 1] in {"/", "-", "."}:
+            end = result.start + date_fragment.start()
+
         while end > result.start and text[end - 1] in " .,:;":
             end -= 1
 
@@ -108,3 +177,28 @@ class InstitutionRecognizer(PatternRecognizer):
             analysis_explanation=result.analysis_explanation,
             recognition_metadata=result.recognition_metadata,
         )
+
+    @staticmethod
+    def _institution_acronym_results(text: str) -> list[RecognizerResult]:
+        results: list[RecognizerResult] = []
+        for match in _INSTITUTION_ACRONYM_RE.finditer(text):
+            value = match.group(0)
+            if value in _CLINICAL_ACRONYM_DENYLIST:
+                continue
+            if not InstitutionRecognizer._has_acronym_context(text, match.start()):
+                continue
+            results.append(
+                RecognizerResult(
+                    entity_type=BR_INSTITUTION,
+                    start=match.start(),
+                    end=match.end(),
+                    score=0.72,
+                )
+            )
+        return results
+
+    @staticmethod
+    def _has_acronym_context(text: str, start: int) -> bool:
+        line_start = text.rfind("\n", 0, start) + 1
+        prefix = text[max(line_start, start - 60) : start]
+        return _INSTITUTION_ACRONYM_CONTEXT_RE.search(prefix) is not None

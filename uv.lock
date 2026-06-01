@@ -915,7 +915,7 @@ wheels = [
 
 [[package]]
 name = "phi-br-presidio-firewall"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "babel" },
@@ -926,6 +926,11 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
     { name = "typer" },
+]
+
+[package.optional-dependencies]
+nlp = [
+    { name = "spacy" },
 ]
 
 [package.dev-dependencies]
@@ -944,8 +949,10 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2" },
     { name = "pyyaml" },
     { name = "rich" },
+    { name = "spacy", marker = "extra == 'nlp'", specifier = ">=3.8,<4" },
     { name = "typer" },
 ]
+provides-extras = ["nlp"]
 
 [package.metadata.requires-dev]
 dev = [

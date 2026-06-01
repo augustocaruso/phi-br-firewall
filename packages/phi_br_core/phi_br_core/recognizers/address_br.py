@@ -9,8 +9,8 @@ from phi_br_core.entities import BR_ADDRESS
 from phi_br_core.placeholders import parse_placeholder
 
 _ADDRESS_LABEL_RE = re.compile(
-    r"(?im)^\s*(?:endere[cç]o|resid[eê]ncia|moradia|bairro|naturalidade|proced[eê]ncia)"
-    r"\s*:\s*(?P<address>[^\n\r]+)"
+    r"(?im)^[ \t]*(?:endere[cç]o|resid[eê]ncia|moradia|bairro|naturalidade|proced[eê]ncia)"
+    r"[ \t]*:[ \t]*(?P<address>[^\n\r]+)"
 )
 _RESIDENCE_CONTEXT_RE = re.compile(
     r"\b(?i:residentes?|reside(?:m)?|mora(?:m)?)\s+em\s+"

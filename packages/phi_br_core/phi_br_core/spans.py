@@ -22,6 +22,8 @@ def _priority(finding: PhiFinding) -> tuple[int, float, int, int]:
 
 
 def _candidate_replaces_current(candidate: PhiFinding, current: PhiFinding) -> bool:
+    if candidate.start == current.start and candidate.end == current.end:
+        return _priority(candidate) > _priority(current)
     if _contains(candidate, current):
         return True
     if _contains(current, candidate):
