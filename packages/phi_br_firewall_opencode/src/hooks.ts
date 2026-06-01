@@ -61,11 +61,23 @@ async function replacePhiParts(
 }
 
 function replaceCommandParts(parts: TextPart[], text: string) {
+  const previousTextPart = parts.find((part) => part.type === "text")
   parts.splice(0, parts.length, {
+    ...structuralPartFields(previousTextPart),
     type: "text",
     text,
     synthetic: true,
   })
+}
+
+function structuralPartFields(part: TextPart | undefined) {
+  const fields: Record<string, unknown> = {}
+  if (!part) return fields
+
+  for (const key of ["id", "sessionID", "messageID"]) {
+    if (typeof part[key] === "string") fields[key] = part[key]
+  }
+  return fields
 }
 
 function modelPayload(redactedText: string) {

@@ -1,6 +1,6 @@
 {
   "name": "phi-br-firewall-opencode",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "OpenCode plugin for local PHI redaction with phi-br-firewall",
   "type": "module",
   "private": true,

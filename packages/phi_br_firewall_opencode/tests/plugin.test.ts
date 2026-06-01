@@ -212,6 +212,9 @@ describe("Phi OpenCode plugin", () => {
     expect(output.parts).toBe(originalParts)
     expect(output.parts).toEqual([
       {
+        id: "part-1",
+        sessionID: "session-1",
+        messageID: "message-1",
         type: "text",
         text: '[PHI_REDACTION_FAILED]\nResponda ao usuario exatamente: "Phi bloqueou esta mensagem antes do modelo. Motivo: cli_timeout."',
         synthetic: true,
