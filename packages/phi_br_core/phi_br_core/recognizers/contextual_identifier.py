@@ -11,6 +11,10 @@ from phi_br_core.entities import BR_CONTEXTUAL_IDENTIFIER
 _EMAIL_PATTERN = re.compile(
     r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
 )
+_LABELED_IDENTIFIER_RE = re.compile(
+    r"\b(?:n[ºo.]?\s*)?(?:SES|protocolo|senha)\s*[:#-]?\s*(?P<value>[A-Z]{0,4}\d{4,12})\b",
+    flags=re.IGNORECASE,
+)
 
 
 class ContextualIdentifierRecognizer(PatternRecognizer):
@@ -48,10 +52,25 @@ class ContextualIdentifierRecognizer(PatternRecognizer):
     ) -> list[RecognizerResult]:
         email_spans = [match.span() for match in _EMAIL_PATTERN.finditer(text)]
         results = super().analyze(text, entities, nlp_artifacts, regex_flags)
-        return [
+        filtered = [
             result
             for result in results
             if not self._is_email_fragment(text, result, email_spans)
+        ]
+        if BR_CONTEXTUAL_IDENTIFIER in set(entities):
+            filtered.extend(self._labeled_identifier_results(text))
+        return filtered
+
+    @staticmethod
+    def _labeled_identifier_results(text: str) -> list[RecognizerResult]:
+        return [
+            RecognizerResult(
+                entity_type=BR_CONTEXTUAL_IDENTIFIER,
+                start=match.start("value"),
+                end=match.end("value"),
+                score=0.86,
+            )
+            for match in _LABELED_IDENTIFIER_RE.finditer(text)
         ]
 
     @staticmethod

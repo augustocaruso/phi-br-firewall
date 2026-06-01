@@ -4,6 +4,7 @@ from phi_br_core.analyzer import build_analyzer
 from phi_br_core.models import PhiAuditResult, PhiFinding
 from phi_br_core.policy import PhiPolicy
 from phi_br_core.spans import resolve_overlaps
+from phi_br_core.strict_audit import strict_audit_findings
 
 
 def audit_text(text: str, policy: PhiPolicy) -> PhiAuditResult:
@@ -23,5 +24,5 @@ def audit_text(text: str, policy: PhiPolicy) -> PhiAuditResult:
         )
         for result in results
     ]
-    residual_findings = resolve_overlaps(findings)
+    residual_findings = resolve_overlaps([*findings, *strict_audit_findings(text)])
     return PhiAuditResult(safe=not residual_findings, residual_findings=residual_findings)

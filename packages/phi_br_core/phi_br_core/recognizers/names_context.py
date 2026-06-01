@@ -13,7 +13,7 @@ from phi_br_core.entities import (
 
 _NAME_WORD = r"[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ][A-Za-zÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇáàâãéèêíìîóòôõúùûç]+"
 _CONNECTOR = r"(?:da|de|do|das|dos|e)"
-_NAME = rf"{_NAME_WORD}(?:\s+(?:{_CONNECTOR}\s+)?{_NAME_WORD}){{0,4}}"
+_NAME = rf"{_NAME_WORD}(?:[ \t]+(?:{_CONNECTOR}[ \t]+)?{_NAME_WORD}){{0,4}}"
 _LABEL_SEPARATOR = r"\s*(?::|-)?\s+"
 _PROFESSIONAL_LEADING_CONTEXT = r"(?:(?:d[ao]|pel[ao]|ao|a|à)\s+)?"
 _PROFESSIONAL_TITLE_PREFIX = r"(?:(?:prof\.?|professor(?:a)?)\s+)?"
@@ -68,10 +68,12 @@ _FIELD_LABEL_TERMS = {
     "prontuario",
     "prontuário",
     "registro",
+    "rg",
     "telefone",
     "tel",
 }
 _WORD_PATTERN = re.compile(r"\w+", flags=re.UNICODE)
+_NAME_PATTERN = re.compile(_NAME)
 
 
 class ClinicalNameContextRecognizer(EntityRecognizer):
@@ -105,11 +107,16 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
             rf"\s*:\s*(?P<name>{_NAME})\b",
         )
         self._family_label_pattern = re.compile(
-            rf"\b(?i:acompanhante|respons[aá]vel|m[aã]e|pai|filh[ao]|av[oóô])"
+            rf"\b(?i:acompanhante|respons[aá]vel|contatos?|m[aã]e|pai|"
+            rf"irm[aã]o|filh[ao]|av[oóô])"
             rf"{_LABEL_SEPARATOR}(?P<name>{_NAME})\b",
         )
         self._family_parenthetical_pattern = re.compile(
-            rf"\b(?P<name>{_NAME})\s*\((?i:m[aã]e|pai|filh[ao]|av[oóô])\)",
+            rf"\b(?P<name>{_NAME})\s*\((?i:m[aã]e|pai|irm[aã]o|filh[ao]|av[oóô])\)",
+        )
+        self._family_list_pattern = re.compile(
+            r"(?im)^\s*(?:filia[cç][aã]o|irm[aã]os?|contatos?)\s*:\s*"
+            r"(?P<value>[^\n\r]+)"
         )
         self._professional_pattern = re.compile(
             rf"\b(?P<name>(?i:{_PROFESSIONAL_LEADING_CONTEXT}"
@@ -118,6 +125,9 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
         self._professional_role_pattern = re.compile(
             rf"\b(?P<name>{_NAME}\s*"
             r"\((?i:intern[oa]|residente|staff|preceptor[ao]?|m[eé]dic[oa])[^)]*\))",
+        )
+        self._professional_training_role_pattern = re.compile(
+            rf"\b(?P<name>{_NAME})\s+R[1-6]\b\s+(?i:psiquiatria|medicina|cl[ií]nica)"
         )
 
     def load(self) -> None:
@@ -159,6 +169,7 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
                     0.76,
                 )
             )
+            results.extend(self._family_list_results(text))
         if BR_HEALTHCARE_PROFESSIONAL_NAME in requested:
             results.extend(
                 self._results_for(
@@ -174,6 +185,14 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
                     self._professional_role_pattern,
                     BR_HEALTHCARE_PROFESSIONAL_NAME,
                     0.76,
+                )
+            )
+            results.extend(
+                self._results_for(
+                    text,
+                    self._professional_training_role_pattern,
+                    BR_HEALTHCARE_PROFESSIONAL_NAME,
+                    0.74,
                 )
             )
         return results
@@ -202,6 +221,29 @@ class ClinicalNameContextRecognizer(EntityRecognizer):
                     score=score,
                 )
             )
+        return results
+
+    def _family_list_results(self, text: str) -> list[RecognizerResult]:
+        results: list[RecognizerResult] = []
+        for field_match in self._family_list_pattern.finditer(text):
+            value = field_match.group("value")
+            if "[" in value:
+                continue
+            offset = field_match.start("value")
+            for name_match in _NAME_PATTERN.finditer(value):
+                name = name_match.group(0)
+                if self._contains_medication_term(name):
+                    continue
+                if name.lower() in _FIELD_LABEL_TERMS:
+                    continue
+                results.append(
+                    RecognizerResult(
+                        entity_type=BR_FAMILY_MEMBER_NAME,
+                        start=offset + name_match.start(),
+                        end=offset + name_match.end(),
+                        score=0.77,
+                    )
+                )
         return results
 
     @staticmethod

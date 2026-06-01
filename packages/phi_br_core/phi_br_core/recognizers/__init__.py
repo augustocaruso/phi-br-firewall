@@ -8,6 +8,7 @@ from phi_br_core.recognizers.dates_br import DateBrRecognizer
 from phi_br_core.recognizers.institutions import InstitutionRecognizer
 from phi_br_core.recognizers.names_context import ClinicalNameContextRecognizer
 from phi_br_core.recognizers.phone_br import PhoneBrRecognizer
+from phi_br_core.recognizers.rg import RgRecognizer
 
 __all__ = [
     "CepRecognizer",
@@ -20,4 +21,5 @@ __all__ = [
     "DateBrRecognizer",
     "InstitutionRecognizer",
     "PhoneBrRecognizer",
+    "RgRecognizer",
 ]

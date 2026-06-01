@@ -16,7 +16,7 @@ _AGE_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 _DURATION_PREFIX_PATTERN = re.compile(
-    r"(?:^|\W)(?:h[áa]|faz|desde|para|por|durante|em|ap[oó]s)\s+$",
+    r"(?:^|\W)(?:h[áa](?:\s+pelo\s+menos)?|faz|desde|para|por|durante|em|ap[oó]s)\s+$",
     flags=re.IGNORECASE,
 )
 
@@ -61,5 +61,5 @@ class AgeBrRecognizer(EntityRecognizer):
         value = text[start:end]
         if re.search(r"\bde\s+idade\b", value, flags=re.IGNORECASE):
             return False
-        prefix = text[max(0, start - 16) : start]
+        prefix = text[max(0, start - 32) : start]
         return bool(_DURATION_PREFIX_PATTERN.search(prefix))

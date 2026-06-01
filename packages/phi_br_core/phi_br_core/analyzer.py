@@ -29,6 +29,7 @@ from phi_br_core.recognizers.email_br import EmailBrRecognizer
 from phi_br_core.recognizers.institutions import InstitutionRecognizer
 from phi_br_core.recognizers.names_context import ClinicalNameContextRecognizer
 from phi_br_core.recognizers.phone_br import PhoneBrRecognizer
+from phi_br_core.recognizers.rg import RgRecognizer
 
 
 @dataclass(frozen=True)
@@ -152,6 +153,7 @@ def build_registry(languages: list[str] | None = None) -> RecognizerRegistry:
         registry = RecognizerRegistry(supported_languages=supported_languages)
 
     registry.add_recognizer(CpfRecognizer())
+    registry.add_recognizer(RgRecognizer())
     registry.add_recognizer(CnsRecognizer())
     registry.add_recognizer(CrmRecognizer())
     registry.add_recognizer(CepRecognizer())

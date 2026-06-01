@@ -47,7 +47,8 @@ class InstitutionRecognizer(PatternRecognizer):
                 Pattern(
                     name="healthcare_institution",
                     regex=(
-                        r"\b(?:Hospital|Cl[ií]nica|UBS|UPA|Unidade\s+B[aá]sica\s+de\s+Sa[uú]de|"
+                        r"\b(?:Hospital|Cl[ií]nica|UBS|UPA|CAPS|Instituto|"
+                        r"Unidade\s+B[aá]sica\s+de\s+Sa[uú]de|"
                         rf"Laborat[oó]rio){_LABEL_SEPARATOR}[A-ZÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ]"
                         r"[\wÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇáàâãéèêíìîóòôõúùûç .'-]{2,60}"
                     ),
@@ -69,6 +70,7 @@ class InstitutionRecognizer(PatternRecognizer):
                 "ubs",
                 "upa",
                 "laboratorio",
+                "instituto",
             ],
             supported_language="pt",
         )

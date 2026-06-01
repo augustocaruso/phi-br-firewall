@@ -17,6 +17,10 @@ def test_detects_valid_cpf() -> None:
     assert "BR_CPF" in entity_types_for("Paciente com CPF 935.411.347-80.")
 
 
+def test_detects_rg_with_label() -> None:
+    assert "BR_RG" in entity_types_for("RG: 21.392.009-34.")
+
+
 def test_rejects_invalid_cpf() -> None:
     assert "BR_CPF" not in entity_types_for("Numero 935.411.347-81.")
 
@@ -36,10 +40,11 @@ def test_detects_phone_and_cep() -> None:
 
 
 def test_detects_contextual_clinical_ids() -> None:
-    types = entity_types_for("Prontuario 123456. Guia 987654321. Laudo 554433.")
+    types = entity_types_for("Prontuario 123456. Guia 987654321. Laudo 554433. Nº SES: 8234636.")
     assert "BR_CLINICAL_RECORD_ID" in types
     assert "BR_AUTHORIZATION_ID" in types
     assert "BR_EXAM_ID" in types
+    assert "BR_CONTEXTUAL_IDENTIFIER" in types
 
 
 def test_does_not_detect_medication_numbers_as_clinical_ids() -> None:
@@ -84,7 +89,7 @@ def test_detects_patient_name_after_name_label() -> None:
 
 
 def test_detects_family_member_names_by_clinical_context() -> None:
-    text = "Acompanhante: Lara (mae). Mae relata piora."
+    text = "Acompanhante: Lara (mae). Contatos: Justino (irmao). Mae relata piora."
     findings = findings_for(text)
 
     family_names = [
@@ -93,7 +98,28 @@ def test_detects_family_member_names_by_clinical_context() -> None:
         if result.entity_type == "BR_FAMILY_MEMBER_NAME"
     ]
 
-    assert family_names == ["Lara"]
+    assert family_names == ["Lara", "Justino"]
+
+
+def test_detects_family_names_in_filiation_and_sibling_lists() -> None:
+    text = (
+        "Filiacao: Eloisio Ficticio da Cunha, Marilda Inventada Braga\n"
+        "Irmaos: 3 irmaos - Wilker Ficticio da Cunha, Walas Inventado Braga"
+    )
+    findings = findings_for(text)
+
+    family_names = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_FAMILY_MEMBER_NAME"
+    ]
+
+    assert family_names == [
+        "Eloisio Ficticio da Cunha",
+        "Marilda Inventada Braga",
+        "Wilker Ficticio da Cunha",
+        "Walas Inventado Braga",
+    ]
 
 
 def test_detects_intern_name_as_healthcare_professional() -> None:
@@ -220,6 +246,12 @@ def test_detects_institution_after_label_separator() -> None:
     assert "BR_INSTITUTION" in types
 
 
+def test_detects_institute_healthcare_institution() -> None:
+    types = entity_types_for("Tratamento no Instituto Castro e Santos (ICS).")
+
+    assert "BR_INSTITUTION" in types
+
+
 def test_detects_address_after_address_label() -> None:
     text = "Endereco: Quadra 10, Rua A, casa 1, Bairro Modelo\nTelefone (61) 99999-9999."
     findings = findings_for(text)
@@ -247,6 +279,20 @@ def test_detects_residence_neighborhood_by_context() -> None:
     assert addresses == ["Vila Modelo"]
 
 
+def test_detects_naturalidade_and_city_state_context_as_address() -> None:
+    text = "Naturalidade: Barra Ficticia-BA. Mudou para Brasilia ha 3 anos."
+    findings = findings_for(text)
+
+    addresses = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_ADDRESS"
+    ]
+
+    assert "Barra Ficticia-BA" in addresses
+    assert "Brasilia" in addresses
+
+
 def test_detects_url_as_contextual_identifier() -> None:
     types = entity_types_for("Portal https://portal.hospital.com.br/paciente/12345.")
 
@@ -259,6 +305,20 @@ def test_detects_url_with_email_like_path_as_contextual_identifier() -> None:
 
     assert "BR_CONTEXTUAL_IDENTIFIER" in types
     assert "BR_EMAIL" in types
+
+
+def test_detects_protocol_and_password_as_contextual_identifiers() -> None:
+    text = "Protocolo: 2290259, Senha: 384715."
+    findings = findings_for(text)
+
+    identifiers = [
+        text[result.start : result.end]
+        for result in findings
+        if result.entity_type == "BR_CONTEXTUAL_IDENTIFIER"
+    ]
+
+    assert "2290259" in identifiers
+    assert "384715" in identifiers
 
 
 def test_detects_pediatric_ages_without_symptom_duration() -> None:
@@ -284,7 +344,7 @@ def test_detects_pediatric_ages_without_symptom_duration() -> None:
 def test_does_not_detect_prescription_or_followup_duration_as_age() -> None:
     text = (
         "Mantenho medicacoes em uso - deixo receitas para 4 meses. "
-        "Retorno em 4 meses. Usar pomada por 2 meses."
+        "Retorno em 4 meses. Usar pomada por 2 meses. Ha pelo menos 2 meses com sintomas."
     )
     findings = findings_for(text)
 
@@ -298,7 +358,7 @@ def test_does_not_detect_prescription_or_followup_duration_as_age() -> None:
 
 
 def test_detects_brazilian_text_month_dates() -> None:
-    text = "Em agosto/2023 houve piora. Retorno em dezembro/2024."
+    text = "Em agosto/2023 houve piora. Retorno em dezembro/2024. DI: 18/06. Em 2017."
     findings = findings_for(text)
 
     dates = [
@@ -309,3 +369,5 @@ def test_detects_brazilian_text_month_dates() -> None:
 
     assert "agosto/2023" in dates
     assert "dezembro/2024" in dates
+    assert "18/06" in dates
+    assert "2017" in dates

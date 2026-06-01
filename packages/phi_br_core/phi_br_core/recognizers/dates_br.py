@@ -31,6 +31,16 @@ class DateBrRecognizer(PatternRecognizer):
                     score=0.78,
                 ),
                 Pattern(
+                    name="br_partial_day_month",
+                    regex=r"\b(?:[0-2]?\d|3[01])/(?:0[1-9]|1[0-2])\b",
+                    score=0.72,
+                ),
+                Pattern(
+                    name="br_standalone_year",
+                    regex=r"\b(?:19|20)\d{2}\b",
+                    score=0.68,
+                ),
+                Pattern(
                     name="br_text_month_date",
                     regex=rf"\b(?i:(?:\d{{1,2}}\s+de\s+)?(?:{month})(?:\s+de)?\s+\d{{4}})\b",
                     score=0.78,

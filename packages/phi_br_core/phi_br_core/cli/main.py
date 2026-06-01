@@ -24,6 +24,7 @@ api_app = typer.Typer(no_args_is_help=True)
 app.add_typer(api_app, name="api", help="Programmatic stdin/stdout API.")
 CUSTOM_RECOGNIZERS = (
     "BR_CPF",
+    "BR_RG",
     "BR_CNS",
     "BR_CRM",
     "BR_CEP",
